@@ -24,13 +24,14 @@ class HealthControlTests(unittest.TestCase):
         for enabled in (True, False):
             with patch("disk_ha.server.DrivePage.read_schedule",
                        return_value={"enabled": enabled, "expression": "0 14 * * *"}):
-                html = render_schedule()
+                html, run_control = render_schedule()
             self.assertIn("0 14 * * *", html)
-            self.assertIn("Run Now", html)
-            self.assertEqual(" disabled" in html, not enabled)
+            self.assertIn("Run Now", run_control)
+            self.assertEqual(" disabled" in run_control, not enabled)
         with patch("disk_ha.server.DrivePage.read_schedule", side_effect=OSError("denied")):
-            self.assertIn("Cron schedule unavailable", render_schedule())
-            self.assertIn(" disabled", render_schedule())
+            html, run_control = render_schedule()
+            self.assertIn("Cron schedule unavailable", html)
+            self.assertIn(" disabled", run_control)
 
     def test_start_uses_only_fixed_service_with_timeout(self):
         with patch("disk_ha.interface.HealthControl.read_schedule",

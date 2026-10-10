@@ -36,7 +36,7 @@ is enabled daily at 14:00 server time (`0 14 * * *`), using the existing script'
 two stable disk paths and email sender and recipient. The existing
 `/root/.msmtprc` supplies credentials; installation does not create or copy it.
 Both command timeouts start at 30 seconds.
-Change **Enabled** and **Cron Schedule** in the Disk Health panel and click **Update**.
+Change **Enabled** and **Cron Schedule** in Health Check Schedule and click **Update**.
 The field reads the actual root cron entry on every page load. An absent entry
 shows disabled monitoring and an empty expression. Updates preserve unrelated jobs
 and update `health.json`; a cron write failure restores the previous settings.

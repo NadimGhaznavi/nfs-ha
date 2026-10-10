@@ -34,7 +34,6 @@
     input[type="text"] { background: #11191c; color: #e5efed; border: 1px solid #adc5c4;
                            border-radius: .3rem; padding: .6rem; font: inherit; max-width: 100%; }
     #schedule-form { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
-    #schedule-form p { flex-basis: 100%; margin-bottom: 0; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: .8rem; border-bottom: 1px solid #345155; }
     thead th { background: #1a2a2e; }
@@ -73,9 +72,13 @@
         </tbody>
       </table>
     </section>
+    <section class="panel" aria-labelledby="schedule-heading">
+      <h2 id="schedule-heading">Health Check Schedule</h2>
+      {{schedule}}
+    </section>
     <section class="panel health" aria-labelledby="health-heading">
       <h2 id="health-heading">Disk Health</h2>
-      {{schedule}}
+      {{run_control}}
       {{health}}
     </section>
   </main>

@@ -17,10 +17,11 @@ The Disk Health panel reads the latest saved check results and displays their
 timestamp in server local time (`YYYY-MM-DD HH:MM:SS`), each disk's status and
 details, and email delivery failures.
 No recorded result and unreadable or corrupt results have explicit messages.
-The panel reads the installed cron entry to populate **Enabled** and **Cron Schedule**.
+The Health Check Schedule section reads the installed cron entry to populate
+**Enabled** and **Cron Schedule**.
 Edit the five-field expression and click **Update** to save it. Uncheck **Enabled**
 and click **Update** to remove the job. An absent job shows an empty schedule.
-Times use the server's timezone. Click **Run Now** to request a background health check, then reload
+Times use the server's timezone. In Disk Health, click **Run Now** to request a background health check, then reload
 to see its completed result. Checks retain their email alerts and overlap protection.
 The button is disabled when monitoring is disabled or settings are unavailable.
 See [disk health]({{ site.baseurl }}{% link pages/disk-health.md %}) for scheduling.

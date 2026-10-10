@@ -28,24 +28,27 @@ def render_page() -> bytes:
         page = page.replace(f"{{{{disk{number}_capacity}}}}", capacity)
         page = page.replace(f"{{{{disk{number}_usage}}}}", used)
     page = page.replace("{{health}}", render_health())
-    page = page.replace("{{schedule}}", render_schedule())
+    schedule, run_control = render_schedule()
+    page = page.replace("{{schedule}}", schedule)
+    page = page.replace("{{run_control}}", run_control)
     return page.encode("utf-8")
 
 
-def render_schedule() -> str:
+def render_schedule() -> tuple[str, str]:
+    """Render the schedule form and manual-run controls from one cron reading."""
     try:
         settings = read_schedule()
     except (OSError, ValueError, subprocess.SubprocessError):
-        return '<p>Cron schedule unavailable.</p><button disabled>Run Now</button>'
+        return '<p>Cron schedule unavailable.</p>', '<button disabled>Run Now</button>'
     expression = escape(settings["expression"], quote=True)
     checked = " checked" if settings["enabled"] else ""
     disabled = "" if settings["enabled"] else " disabled"
-    return ('<form id="schedule-form"><p>Schedule runs in server time.</p>'
+    return ('<form id="schedule-form">'
             f'<label><input id="schedule-enabled" type="checkbox"{checked}> Enabled</label> '
             '<label for="schedule-expression">Cron Schedule</label> '
             f'<input id="schedule-expression" type="text" size="20" maxlength="255" value="{expression}"> '
             '<button id="update-schedule" type="submit">Update</button></form>'
-            '<p id="schedule-status" role="status" aria-live="polite"></p>'
+            '<p id="schedule-status" role="status" aria-live="polite"></p>',
             f'<button id="run-now" type="button"{disabled}>Run Now</button>'
             '<p id="run-status" role="status" aria-live="polite"></p>')
 
