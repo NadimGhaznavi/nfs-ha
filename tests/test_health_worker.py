@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import time
+from threading import Event, Thread
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -59,7 +60,7 @@ class HealthWorkerTests(unittest.TestCase):
         checked_at = datetime.fromisoformat(result["checked_at"])
         self.assertIsNotNone(checked_at.tzinfo)
         self.assertEqual(checked_at.microsecond, 0)
-        with patch("disk_ha.server.DrivePage.DDISKHA.HEALTH_RESULT", str(self.result)), \
+        with patch("disk_ha.server.DrivePage.DDiskHA.HEALTH_RESULT", str(self.result)), \
                 patch("disk_ha.server.DrivePage.read_usage", return_value=None):
             page = render_page().decode()
         self.assertIn("Disk Health", page)
@@ -73,7 +74,7 @@ class HealthWorkerTests(unittest.TestCase):
         result = HealthResult(self.result).read()
         try:
             with patch.dict(os.environ, {"TZ": "America/Toronto"}), \
-                    patch("disk_ha.server.DrivePage.DDISKHA.HEALTH_RESULT", str(self.result)):
+                    patch("disk_ha.server.DrivePage.DDiskHA.HEALTH_RESULT", str(self.result)):
                 time.tzset()
                 for timestamp, local in (("2026-01-02T02:03:04.123456+00:00", "2026-01-01 21:03:04"),
                                          ("2026-07-02T02:03:04.123456+00:00", "2026-07-01 22:03:04")):
@@ -95,7 +96,7 @@ class HealthWorkerTests(unittest.TestCase):
         self.assertEqual(status, 1)
         email.assert_called_once()
         self.assertEqual(HealthResult(self.result).read()["notification_error"], "<delivery failed>")
-        with patch("disk_ha.server.DrivePage.DDISKHA.HEALTH_RESULT", str(self.result)):
+        with patch("disk_ha.server.DrivePage.DDiskHA.HEALTH_RESULT", str(self.result)):
             page = render_page().decode()
         self.assertIn("&lt;failed &amp; degraded&gt;", page)
         self.assertIn("&lt;delivery failed&gt;", page)
@@ -116,6 +117,82 @@ class HealthWorkerTests(unittest.TestCase):
             activity.assert_not_called()
         self.assertEqual(self.result.read_text(), "previous result")
 
+    def test_requested_report_checks_both_disks_and_emails_every_health_outcome(self):
+        self.values.update(enabled=False, expression=None)
+        self.save_config()
+        healthy = "SMART overall-health self-assessment test result: PASSED\n"
+        outputs = (healthy, healthy + "197 Pending 0x0033 100 100 000 Old_age Always - 1\n",
+                   healthy.replace("PASSED", "FAILED"), "SMART unavailable")
+        for output in outputs:
+            with self.subTest(output=output), \
+                    patch("disk_ha.interface.SmartInspection.SmartInspection.inspect_verbose",
+                          side_effect=lambda disk: DiskHealth.from_smart(disk, output, 0)) as inspect, \
+                    patch("disk_ha.interface.EmailNotification.EmailNotification.send_report") as email, \
+                    redirect_stdout(io.StringIO()):
+                status = run(self.config, self.result, email_report=True)
+            self.assertEqual(inspect.call_count, 2)
+            email.assert_called_once()
+            self.assertEqual(status, 0 if output == healthy else 1)
+            self.assertEqual([disk["smart_output"] for disk in HealthResult(self.result).read()["disks"]],
+                             [output, output])
+        self.assertFalse(HealthConfiguration(self.config).enabled)
+
+    def test_report_email_failure_is_persisted(self):
+        with patch("disk_ha.interface.SmartInspection.SmartInspection.inspect_verbose",
+                   side_effect=lambda disk: DiskHealth(disk)), \
+                patch("disk_ha.interface.EmailNotification.EmailNotification.send_report",
+                      side_effect=NotificationError("Email delivery timed out.")), redirect_stdout(io.StringIO()):
+            self.assertEqual(run(self.config, self.result, email_report=True), 1)
+        self.assertEqual(HealthResult(self.result).read()["notification_error"], "Email delivery timed out.")
+
+    def test_report_without_mail_settings_preserves_last_result(self):
+        self.values.update(enabled=False, expression=None, mail=None)
+        self.save_config()
+        self.result.write_text("previous result")
+        with patch("disk_ha.health.CheckDisks") as activity, self.assertRaisesRegex(ValueError, "email"):
+            run(self.config, self.result, email_report=True)
+        activity.assert_not_called()
+        self.assertEqual(self.result.read_text(), "previous result")
+
+    def test_report_waits_for_active_check_and_then_emails(self):
+        locking = Event()
+        inspected = Event()
+        flock = fcntl.flock
+        errors = []
+
+        def lock(stream, operation):
+            self.assertEqual(operation, fcntl.LOCK_EX)
+            locking.set()
+            flock(stream, operation)
+
+        def worker():
+            try:
+                run(self.config, self.result, email_report=True)
+            except Exception as error:
+                errors.append(error)
+
+        def inspect(disk):
+            inspected.set()
+            return DiskHealth(disk)
+
+        with self.config.with_suffix(".lock").open("a") as active, \
+                patch("disk_ha.health.fcntl.flock", side_effect=lock), \
+                patch("disk_ha.interface.SmartInspection.SmartInspection.inspect_verbose", side_effect=inspect), \
+                patch("disk_ha.interface.EmailNotification.EmailNotification.send_report") as email, \
+                redirect_stdout(io.StringIO()):
+            flock(active, fcntl.LOCK_EX)
+            thread = Thread(target=worker, daemon=True)
+            thread.start()
+            try:
+                self.assertTrue(locking.wait(2))
+                self.assertFalse(inspected.is_set())
+            finally:
+                flock(active, fcntl.LOCK_UN)
+                thread.join(timeout=3)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(errors, [])
+            email.assert_called_once()
+
     def test_failed_atomic_replace_keeps_previous_result_and_cleans_candidate(self):
         self.worker(lambda disk: DiskHealth(disk))
         previous = self.result.read_bytes()
@@ -126,7 +203,7 @@ class HealthWorkerTests(unittest.TestCase):
         self.assertEqual(set(self.root.iterdir()), {self.config, self.result, self.config.with_suffix(".lock")})
 
     def test_missing_corrupt_and_invalid_shape_results_show_explicit_web_state(self):
-        with patch("disk_ha.server.DrivePage.DDISKHA.HEALTH_RESULT", str(self.result)):
+        with patch("disk_ha.server.DrivePage.DDiskHA.HEALTH_RESULT", str(self.result)):
             self.assertIn(b"No health check recorded", render_page())
             for value in ("broken json", "[]", "{}", '{"checked_at": 2, "disks": [], "notification_error": null}'):
                 self.result.write_text(value)

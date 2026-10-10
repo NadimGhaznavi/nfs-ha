@@ -70,6 +70,12 @@ Cron appends reports, skipped-run messages, and command failures to
 A configuration or persistence failure exits with status 1 and leaves the last
 completed result in place; check its timestamp and the log.
 Mail credentials stay in the external msmtp file and are not logged.
+**Email disk report** uses the configured mail recipient and runs `smartctl -x`
+on both disks. It emails one report with full SMART output even when both disks
+pass. The command is `disk-ha-check --email-report`, run as root. This request
+works with scheduling disabled and waits on the shared health-check lock.
+Delivery errors are saved with the latest health result; detailed reports and
+command failures are written to `data/health.log`.
 Upgrade and removal preserve configuration, results, and logs. Removal deletes
-the named cron entry, manual-check service, sudo permissions, and checker and
+the named cron entry, manual-check and email-report services, sudo permissions, and checker and
 schedule-helper executables.

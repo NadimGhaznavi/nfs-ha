@@ -4,14 +4,21 @@ from contextlib import redirect_stdout
 import io
 import json
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from disk_ha import schedule
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 
 
 class ScheduleHelperTests(unittest.TestCase):
+    def test_contact_returns_only_configured_recipient(self):
+        with patch.object(schedule, "HealthConfiguration", return_value=SimpleNamespace(
+                notification=SimpleNamespace(recipient="operator@example.com"))):
+            self.assertEqual(schedule.dispatch({"action": "contact"}), {"recipient": "operator@example.com"})
+        with patch.object(schedule, "HealthConfiguration", return_value=SimpleNamespace(notification=None)):
+            self.assertEqual(schedule.dispatch({"action": "contact"}), {"recipient": None})
     def test_reads_only_owned_schedule_settings(self):
         with patch.object(schedule.HealthSchedule, "read",
                           return_value={"enabled": True, "expression": "0 14 * * *"}) as read:
@@ -23,9 +30,9 @@ class ScheduleHelperTests(unittest.TestCase):
         with patch.object(schedule.subprocess, "run") as command, \
                 patch.object(schedule.HealthSchedule, "update") as update:
             schedule.dispatch({"action": "update", "enabled": True, "expression": "0 3 * * *"})
-            command.assert_called_once_with([DDISKHA.SYSTEMCTL, "enable", "--now", "cron.service"],
+            command.assert_called_once_with([DDiskHA.SYSTEMCTL, "enable", "--now", "cron.service"],
                                             capture_output=True, check=True, timeout=30)
-            update.assert_called_once_with(Path(DDISKHA.INSTALL_DIR), True, "0 3 * * *")
+            update.assert_called_once_with(Path(DDiskHA.INSTALL_DIR), True, "0 3 * * *")
 
     def test_bad_requests_cannot_choose_commands_or_paths(self):
         with patch.object(schedule.subprocess, "run") as command, \

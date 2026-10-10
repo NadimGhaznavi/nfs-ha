@@ -6,18 +6,44 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from disk_ha.constants.DDISKHA import DDISKHA
-from disk_ha.interface.HealthControl import read_schedule, update_schedule, request_check
-from disk_ha.server.DrivePage import render_schedule
+from disk_ha.constants.DDiskHA import DDiskHA
+from disk_ha.interface.HealthControl import read_schedule, update_schedule, request_check, request_email_report
+from disk_ha.server.DrivePage import render_schedule, render_email_notification
 
 
 class HealthControlTests(unittest.TestCase):
+    def test_email_contact_display_and_unconfigured_state(self):
+        with patch("disk_ha.server.DrivePage.read_contact", return_value="<operator>@example.com"):
+            html = render_email_notification()
+            self.assertIn("Contact: &lt;operator&gt;@example.com", html)
+            self.assertIn("Email disk report", html)
+            self.assertNotIn(" disabled", html)
+        with patch("disk_ha.server.DrivePage.read_contact", return_value=None):
+            self.assertIn("Not configured", render_email_notification())
+            self.assertIn(" disabled", render_email_notification())
+        with patch("disk_ha.server.DrivePage.read_contact", side_effect=OSError("denied")):
+            self.assertIn("Unavailable", render_email_notification())
+
+    def test_email_report_uses_fixed_service_without_reading_cron(self):
+        with patch("disk_ha.interface.HealthControl.read_contact", return_value="operator@example.com"), \
+                patch("disk_ha.interface.HealthControl.read_schedule") as cron, \
+                patch("disk_ha.interface.HealthControl.subprocess.run") as command:
+            request_email_report()
+            cron.assert_not_called()
+        command.assert_called_once_with(
+            [DDiskHA.SUDO, "-n", DDiskHA.SYSTEMCTL, "start", "--no-block", "disk-ha-email-report.service"],
+            capture_output=True, check=True, timeout=10)
+        with patch("disk_ha.interface.HealthControl.read_contact", return_value=None), \
+                patch("disk_ha.interface.HealthControl.subprocess.run") as command:
+            with self.assertRaises(ValueError):
+                request_email_report()
+            command.assert_not_called()
     def test_settings_read_installed_cron_helper(self):
         with patch("disk_ha.interface.HealthControl.subprocess.run",
                    return_value=SimpleNamespace(returncode=0, stdout='{"enabled": true, "expression": "0 14 * * *"}')) as command:
             self.assertEqual(read_schedule(), {"enabled": True, "expression": "0 14 * * *"})
         self.assertEqual(command.call_args.args[0],
-                         [DDISKHA.SUDO, "-n", str(Path(DDISKHA.INSTALL_DIR) / "bin/disk-ha-schedule")])
+                         [DDiskHA.SUDO, "-n", str(Path(DDiskHA.INSTALL_DIR) / "bin/disk-ha-schedule")])
         self.assertEqual(command.call_args.kwargs["input"], '{"action": "read"}')
 
     def test_schedule_enabled_disabled_and_unavailable(self):
@@ -39,7 +65,7 @@ class HealthControlTests(unittest.TestCase):
                 patch("disk_ha.interface.HealthControl.subprocess.run") as command:
             request_check()
         command.assert_called_once_with(
-            [DDISKHA.SUDO, "-n", DDISKHA.SYSTEMCTL, "start", "--no-block", "disk-ha-health.service"],
+            [DDiskHA.SUDO, "-n", DDiskHA.SYSTEMCTL, "start", "--no-block", "disk-ha-health.service"],
             capture_output=True, check=True, timeout=10)
 
     def test_disabled_and_failed_requests_do_not_report_success(self):

@@ -81,8 +81,26 @@
       {{run_control}}
       {{health}}
     </section>
+    <section class="panel" aria-labelledby="email-heading">
+      <h2 id="email-heading">Email Notification</h2>
+      {{email_notification}}
+    </section>
   </main>
   <script>
+    const emailButton = document.getElementById('email-report');
+    emailButton.addEventListener('click', async () => {
+      const status = document.getElementById('email-status');
+      emailButton.disabled = true;
+      status.textContent = 'Requesting verbose disk report…';
+      try {
+        const response = await fetch('/health/email-report', { method: 'POST' });
+        status.textContent = await response.text();
+      } catch (error) {
+        status.textContent = 'Request failed. Reload the page and try again.';
+      } finally {
+        emailButton.disabled = false;
+      }
+    });
     const form = document.getElementById('schedule-form');
     if (form) form.addEventListener('submit', async event => {
       event.preventDefault();

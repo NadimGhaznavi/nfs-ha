@@ -24,6 +24,12 @@ and click **Update** to remove the job. An absent job shows an empty schedule.
 Times use the server's timezone. In Disk Health, click **Run Now** to request a background health check, then reload
 to see its completed result. Checks retain their email alerts and overlap protection.
 The button is disabled when monitoring is disabled or settings are unavailable.
+The final Email Notification section shows **Contact**, the configured alert recipient.
+Click **Email disk report** to request a fresh, verbose SMART report for both disks,
+including healthy disks. The request runs in the background, waits for an active
+health check, and works when the cron schedule is disabled. Reload Disk Health
+after completion to see the latest results and any email delivery failure.
+The email button is disabled when mail settings are missing or unavailable.
 See [disk health]({{ site.baseurl }}{% link pages/disk-health.md %}) for scheduling.
 It listens on all IPv4 interfaces and requires no third-party Python packages.
 
@@ -55,11 +61,13 @@ shell and no separate home directory. Application code stays root-owned;
 `/opt/prod/disk-ha/data/` belongs to root and the `diskha` group with mode `0750`.
 Root runs scheduled health checks and writes results with mode `0640`;
 the Web UI account has read access.
-The root-owned `disk-ha-health.service` runs manual checks. Validated rules in
-`/etc/sudoers.d/disk-ha-health` let `diskha` start that service and call the
+The root-owned `disk-ha-health.service` runs manual checks;
+`disk-ha-email-report.service` runs requested email reports. Validated rules in
+`/etc/sudoers.d/disk-ha-health` let `diskha` start these services and call the
 `disk-ha-schedule` helper to read or update only disk-ha's marked root cron entry.
 The helper validates settings, preserves unrelated jobs, and keeps the worker's
-configuration consistent with GUI updates. The Web UI cannot read mail credentials.
+configuration consistent with GUI updates. It also supplies the configured contact
+address to the page. The Web UI cannot read mail credentials.
 The Web UI is intended for a trusted network; users with page access can update
 schedules and request checks.
 

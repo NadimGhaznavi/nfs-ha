@@ -22,9 +22,9 @@ class CheckDisks:
         self.inspect = inspect
         self.notify = notify
 
-    def run(self) -> DiskCheckReport:
+    def run(self, notify_always: bool = False) -> DiskCheckReport:
         report = DiskCheckReport(tuple(self.inspect(disk) for disk in self.disks))
-        if report.failed:
+        if report.failed or notify_always:
             try:
                 self.notify(report, self.hostname)
             except NotificationError as error:

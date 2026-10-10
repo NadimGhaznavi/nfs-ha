@@ -7,7 +7,7 @@ import shlex
 import subprocess
 from tempfile import NamedTemporaryFile
 
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.interface.HealthConfiguration import HealthConfiguration, validate_expression
 
 
@@ -16,7 +16,7 @@ class HealthSchedule:
 
     @classmethod
     def _crontab(cls) -> str:
-        result = subprocess.run([DDISKHA.CRONTAB, "-u", "root", "-l"],
+        result = subprocess.run([DDiskHA.CRONTAB, "-u", "root", "-l"],
                                 capture_output=True, text=True, timeout=30,
                                 env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"})
         if result.returncode == 0:
@@ -88,5 +88,5 @@ class HealthSchedule:
             lines.append(f"{configuration.expression} {command} # {cls.COMMENT}")
         updated = "\n".join(lines) + ("\n" if lines else "")
         if updated != previous:
-            subprocess.run([DDISKHA.CRONTAB, "-u", "root", "-"], input=updated,
+            subprocess.run([DDiskHA.CRONTAB, "-u", "root", "-"], input=updated,
                            text=True, check=True, timeout=30)

@@ -60,8 +60,8 @@ Add application modules and default configuration only as implementation
 requires them. Installed configuration belongs in `/opt/prod/disk-ha/conf/`;
 saved data belongs in `/opt/prod/disk-ha/data/`.
 
-`DDISKHA.VERSION` and `DDISKHA.CMDB_CODENAME` MUST remain single-line literal
-strings in `disk_ha/constants/DDISKHA.py` for release tooling and CMDB discovery.
+`DDiskHA.VERSION` and `DDiskHA.CMDB_CODENAME` MUST remain single-line literal
+strings in `disk_ha/constants/DDiskHA.py` for release tooling and CMDB discovery.
 Keep `CMDB_SUBTYPE`, `CMDB_SUPPLIER`, and `INSTALL_DIR` in that same class.
 
 ## Configuration and external interfaces
@@ -79,7 +79,7 @@ Keep `CMDB_SUBTYPE`, `CMDB_SUPPLIER`, and `INSTALL_DIR` in that same class.
   delivery behind interfaces that own their commands and validate results.
 - Credentials and secrets MUST NOT appear in logs or command arguments.
 - Network and subprocess operations MUST have explicit timeouts.
-- Keep shared installation paths and command constants in `DDISKHA`. Keep
+- Keep shared installation paths and command constants in `DDiskHA`. Keep
   deployment-specific disk identities, paths, schedules, and notification
   settings in configuration.
 
@@ -98,7 +98,7 @@ Tests and routine verification MUST NOT synchronize production disks or send
 real operator notifications. Use temporary directories and simulated external
 interfaces unless the owner explicitly authorizes a live operation.
 
-Installation targets `/opt/prod/disk-ha` through `DDISKHA.INSTALL_DIR`. The
+Installation targets `/opt/prod/disk-ha` through `DDiskHA.INSTALL_DIR`. The
 current installer deploys the Python package, readable CMDB metadata, and a
 bundled Web UI executable managed by `disk-ha-web.service`. The Web UI serves a
 title bar and a Drive Configuration table on port `23300` as the persistent `diskha` Linux account. Installation
@@ -110,6 +110,9 @@ The Web UI reads the live root cron entry and edits its enabled flag and express
 through a validated, root-owned helper. Unrelated cron jobs are preserved; failed
 cron writes restore the worker configuration. A separate permitted sudo command
 requests the root-owned manual health-check service.
+A final Email Notification panel displays the configured recipient and requests a
+root-owned verbose report service. Requested reports include both disks' full SMART
+output, are emailed even for healthy disks, and wait on the shared worker lock.
 The owner selected daily checks at 14:00 server time and the existing script's
 email settings; deployment settings remain configurable and survive upgrades.
 Synchronization and application tables have not been implemented. See the
@@ -174,7 +177,7 @@ commit generated site output. Report checks that could not be run.
 Record meaningful changes under `## [Unreleased]` in `CHANGELOG.md`.
 Keep entries focused on user-visible outcomes.
 
-Release tooling MUST update `DDISKHA.VERSION` and `DDISKHA.CMDB_CODENAME` and
+Release tooling MUST update `DDiskHA.VERSION` and `DDiskHA.CMDB_CODENAME` and
 assign the changelog version and timestamp. `scripts/new-release.sh` takes a
 version, a message that becomes the codename, and an optional next feature branch.
 It runs from a clean, committed feature branch, merges through `dev` and `main`,

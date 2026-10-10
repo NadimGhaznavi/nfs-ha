@@ -6,10 +6,10 @@ from html import escape
 from pathlib import Path
 import subprocess
 
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.interface.HealthResult import HealthResult
 from disk_ha.interface.DriveUsage import read_usage
-from disk_ha.interface.HealthControl import read_schedule
+from disk_ha.interface.HealthControl import read_schedule, read_contact
 
 
 def render_page() -> bytes:
@@ -31,7 +31,22 @@ def render_page() -> bytes:
     schedule, run_control = render_schedule()
     page = page.replace("{{schedule}}", schedule)
     page = page.replace("{{run_control}}", run_control)
+    page = page.replace("{{email_notification}}", render_email_notification())
     return page.encode("utf-8")
+
+
+def render_email_notification() -> str:
+    try:
+        recipient = read_contact()
+    except (OSError, ValueError, subprocess.SubprocessError):
+        contact = "Unavailable"
+        disabled = " disabled"
+    else:
+        contact = escape(recipient) if recipient is not None else "Not configured"
+        disabled = " disabled" if recipient is None else ""
+    return (f'<p>Contact: {contact}</p>'
+            f'<button id="email-report" type="button"{disabled}>Email disk report</button>'
+            '<p id="email-status" role="status" aria-live="polite"></p>')
 
 
 def render_schedule() -> tuple[str, str]:
@@ -55,7 +70,7 @@ def render_schedule() -> tuple[str, str]:
 
 def render_health() -> str:
     try:
-        result = HealthResult(Path(DDISKHA.HEALTH_RESULT)).read()
+        result = HealthResult(Path(DDiskHA.HEALTH_RESULT)).read()
     except (OSError, ValueError):
         return "<p>Health results unavailable.</p>"
     if result is None:

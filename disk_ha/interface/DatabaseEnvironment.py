@@ -4,13 +4,13 @@ import os
 from pathlib import Path
 import stat
 
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 
 
 class DatabaseEnvironment:
     @staticmethod
     def read(path: Path | None = None) -> dict[str, str]:
-        path = Path(DDISKHA.DATABASE_ENV) if path is None else Path(path)
+        path = Path(DDiskHA.DATABASE_ENV) if path is None else Path(path)
         descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(descriptor) as stream:
             info = os.fstat(stream.fileno())
