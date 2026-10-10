@@ -1,13 +1,15 @@
 """Render the two-drive configuration table."""
 
 from importlib.resources import files
+from datetime import datetime
 from html import escape
 from pathlib import Path
+import subprocess
 
 from disk_ha.constants.DDISKHA import DDISKHA
 from disk_ha.interface.HealthResult import HealthResult
 from disk_ha.interface.DriveUsage import read_usage
-from disk_ha.interface.HealthControl import configuration
+from disk_ha.interface.HealthControl import read_schedule
 
 
 def render_page() -> bytes:
@@ -32,13 +34,18 @@ def render_page() -> bytes:
 
 def render_schedule() -> str:
     try:
-        settings = configuration()
-    except (OSError, ValueError):
+        settings = read_schedule()
+    except (OSError, ValueError, subprocess.SubprocessError):
         return '<p>Cron schedule unavailable.</p><button disabled>Run Now</button>'
-    state = "Enabled" if settings.enabled else "Disabled"
-    expression = escape(settings.expression or "Not configured")
-    disabled = "" if settings.enabled else " disabled"
-    return (f'<p>Cron schedule: <code>{expression}</code> (server time). {state}.</p>'
+    expression = escape(settings["expression"], quote=True)
+    checked = " checked" if settings["enabled"] else ""
+    disabled = "" if settings["enabled"] else " disabled"
+    return ('<form id="schedule-form"><p>Schedule runs in server time.</p>'
+            f'<label><input id="schedule-enabled" type="checkbox"{checked}> Enabled</label> '
+            '<label for="schedule-expression">Cron Schedule</label> '
+            f'<input id="schedule-expression" type="text" size="20" maxlength="255" value="{expression}"> '
+            '<button id="update-schedule" type="submit">Update</button></form>'
+            '<p id="schedule-status" role="status" aria-live="polite"></p>'
             f'<button id="run-now" type="button"{disabled}>Run Now</button>'
             '<p id="run-status" role="status" aria-live="polite"></p>')
 
@@ -59,7 +66,10 @@ def render_health() -> str:
                     f'<td>{escape(problems)}</td></tr>')
     notification = ("<p>Email alert delivery failed: " + escape(result["notification_error"]) + "</p>"
                     if result["notification_error"] is not None else "")
-    return (f'<p>Last check: <time>{escape(result["checked_at"])}</time></p>'
+    checked_at = datetime.fromisoformat(result["checked_at"]).astimezone()
+    timestamp = checked_at.isoformat(timespec="seconds")
+    display_time = checked_at.strftime("%Y-%m-%d %H:%M:%S")
+    return (f'<p>Last check: <time datetime="{timestamp}">{display_time}</time> (server time)</p>'
             '<table><thead><tr><th scope="col">Device</th><th scope="col">Health</th>'
             '<th scope="col">Identity</th><th scope="col">Details</th></tr></thead>'
             '<tbody>' + "".join(rows) + '</tbody></table>' + notification)

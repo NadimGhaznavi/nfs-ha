@@ -31,6 +31,10 @@
     button { background: #83d5c5; color: #11191c; border: 0; border-radius: .3rem;
              padding: .6rem 1rem; font: inherit; font-weight: 600; cursor: pointer; }
     button:disabled { opacity: .5; cursor: default; }
+    input[type="text"] { background: #11191c; color: #e5efed; border: 1px solid #adc5c4;
+                           border-radius: .3rem; padding: .6rem; font: inherit; max-width: 100%; }
+    #schedule-form { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+    #schedule-form p { flex-basis: 100%; margin-bottom: 0; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: .8rem; border-bottom: 1px solid #345155; }
     thead th { background: #1a2a2e; }
@@ -76,7 +80,37 @@
     </section>
   </main>
   <script>
+    const form = document.getElementById('schedule-form');
+    if (form) form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const update = document.getElementById('update-schedule');
+      const status = document.getElementById('schedule-status');
+      update.disabled = true;
+      status.textContent = 'Updating schedule…';
+      try {
+        const response = await fetch('/health/schedule', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: document.getElementById('schedule-enabled').checked,
+                                 expression: document.getElementById('schedule-expression').value })
+        });
+        if (!response.ok) {
+          status.textContent = await response.text();
+          return;
+        }
+        const settings = await response.json();
+        document.getElementById('schedule-enabled').checked = settings.enabled;
+        document.getElementById('schedule-expression').value = settings.expression;
+        monitoringEnabled = settings.enabled;
+        document.getElementById('run-now').disabled = !settings.enabled;
+        status.textContent = 'Schedule updated.';
+      } catch (error) {
+        status.textContent = 'Update failed. Reload to check the installed schedule before retrying.';
+      } finally {
+        update.disabled = false;
+      }
+    });
     const button = document.getElementById('run-now');
+    let monitoringEnabled = button ? !button.disabled : false;
     if (button) button.addEventListener('click', async () => {
       const status = document.getElementById('run-status');
       button.disabled = true;
@@ -87,7 +121,7 @@
       } catch (error) {
         status.textContent = 'Request failed. Reload the page and try again.';
       } finally {
-        button.disabled = false;
+        button.disabled = !monitoringEnabled;
       }
     });
   </script>
