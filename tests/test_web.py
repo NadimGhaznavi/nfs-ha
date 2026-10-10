@@ -19,6 +19,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 from http.server import ThreadingHTTPServer
 from disk_ha.server.__main__ import WebHandler
+from disk_ha.server.DrivePage import render_page
 from test_install import installer
 
 
@@ -40,8 +41,9 @@ class WebTests(unittest.TestCase):
         cls.server.server_close()
         cls.thread.join(timeout=5)
 
-    def test_page_and_head(self):
-        expected = (ROOT / "disk_ha/server/static/index.html").read_bytes()
+    @patch("disk_ha.server.DrivePage.read_usage", return_value=None)
+    def test_page_and_head(self, usage):
+        expected = render_page()
         with self.opener.open(self.url + "/?test=1", timeout=2) as response:
             self.assertEqual(response.status, 200)
             self.assertEqual(response.read(), expected)
@@ -82,7 +84,11 @@ class WebTests(unittest.TestCase):
                 self.assertTrue(select.select([process.stdout], [], [], 5)[0], "Startup timed out")
                 self.assertIn(f"http://127.0.0.1:{port}/", process.stdout.readline())
                 with self.opener.open(f"http://127.0.0.1:{port}/", timeout=2) as response:
-                    self.assertEqual(response.read(), (ROOT / "disk_ha/server/static/index.html").read_bytes())
+                    page = response.read()
+                    self.assertIn(b"Drive Configuration", page)
+                    self.assertIn(b"Disk 1", page)
+                    self.assertIn(b"Disk 2", page)
+                    self.assertNotIn(b"{{disk", page)
             finally:
                 process.terminate()
                 process.communicate(timeout=5)
