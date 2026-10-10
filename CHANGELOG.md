@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Role column in Drive Configuration identifying Disk 1 as Source and Disk 2 as Target.
+
 ## [0.5.0] - 2026-10-10 @ 19:45
 
 This release is in memory of the last **Dodo** who died in 1681.

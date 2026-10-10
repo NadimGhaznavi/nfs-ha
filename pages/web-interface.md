@@ -8,7 +8,7 @@ layout: single
 
 The web interface at `http://<server>:23300/` displays a dark teal title bar
 with the caption “Vigilent since October 2026” and a Drive Configuration table.
-Disk 1 is the source at `/exports/disk1`; Disk 2 is the destination at
+The Role column labels Disk 1 as Source at `/exports/disk1` and Disk 2 as Target at
 `/exports/disk2`. Capacity and used space are shown in decimal TB
 (1 TB = 1,000,000,000,000 bytes), rounded to two decimal places.
 Reload the page to refresh the readings. Missing mounts display “Not mounted”;
