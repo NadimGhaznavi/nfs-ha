@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+The **Yvonne** release is dedicated to [Yvonne Choquet-Bruhat](https://en.wikipedia.org/wiki/Yvonne_Choquet-Bruhat).
+
 - Dark teal web interface title bar with the caption “Vigilent since October 2026”.
 
 ## [0.3.0] - 2026-10-08 @ 18:03
