@@ -14,10 +14,13 @@ Disk 1 is the source at `/exports/disk1`; Disk 2 is the destination at
 Reload the page to refresh the readings. Missing mounts display “Not mounted”;
 failed usage readings display “Unavailable”.
 The Disk Health panel reads the latest saved check results and displays their
-UTC timestamp, each disk's status and details, and email delivery failures.
+timestamp in server local time (`YYYY-MM-DD HH:MM:SS`), each disk's status and
+details, and email delivery failures.
 No recorded result and unreadable or corrupt results have explicit messages.
-The panel shows the configured cron expression in server time and whether monitoring
-is enabled. Click **Run Now** to request a background health check, then reload
+The panel reads the installed cron entry to populate **Enabled** and **Cron Schedule**.
+Edit the five-field expression and click **Update** to save it. Uncheck **Enabled**
+and click **Update** to remove the job. An absent job shows an empty schedule.
+Times use the server's timezone. Click **Run Now** to request a background health check, then reload
 to see its completed result. Checks retain their email alerts and overlap protection.
 The button is disabled when monitoring is disabled or settings are unavailable.
 See [disk health]({{ site.baseurl }}{% link pages/disk-health.md %}) for scheduling.
@@ -30,7 +33,7 @@ cron with the `crontab` command, and a running local MariaDB server with the
 `mariadb` client, run from the checkout. Enabled monitoring also needs `smartctl`
 and `msmtp` with a configured credential file.
 Root must be able to connect to MariaDB through Unix socket authentication.
-Manual checks also require `sudo` and `visudo`.
+Schedule controls and manual checks also require `sudo` and `visudo`.
 
 ```sh
 sudo scripts/install.sh
@@ -51,10 +54,13 @@ shell and no separate home directory. Application code stays root-owned;
 `/opt/prod/disk-ha/data/` belongs to root and the `diskha` group with mode `0750`.
 Root runs scheduled health checks and writes results with mode `0640`;
 the Web UI account has read access.
-Systemd supplies a private copy of `health.json` for displaying monitoring settings.
-The root-owned `disk-ha-health.service` runs manual checks. A validated rule in
-`/etc/sudoers.d/disk-ha-health` lets `diskha` start only that service.
-The Web UI is intended for a trusted network; users with page access can request checks.
+The root-owned `disk-ha-health.service` runs manual checks. Validated rules in
+`/etc/sudoers.d/disk-ha-health` let `diskha` start that service and call the
+`disk-ha-schedule` helper to read or update only disk-ha's marked root cron entry.
+The helper validates settings, preserves unrelated jobs, and keeps the worker's
+configuration consistent with GUI updates. The Web UI cannot read mail credentials.
+The Web UI is intended for a trusted network; users with page access can update
+schedules and request checks.
 
 Following the BMDynIP provisioning pattern, installation creates:
 

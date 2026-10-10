@@ -2,6 +2,7 @@
 
 import argparse
 import fcntl
+import json
 import os
 from pathlib import Path
 import shutil
@@ -65,6 +66,7 @@ def install() -> None:
             raise ValueError(f"Required executable is missing: {executable}")
     account = SystemAccount.provision()
     root = Path(DDISKHA.INSTALL_DIR)
+    upgrading = (root / "bin/disk-ha-check").exists()
     root.mkdir(parents=True, exist_ok=True)
     root.chmod(0o755)
     for name in ("bin", "conf", "data"):
@@ -111,6 +113,12 @@ def install() -> None:
         zipapp.create_archive(source_root, target=checker, interpreter="/usr/bin/python3")
         checker.chmod(0o755)
         checker.replace(root / "bin/disk-ha-check")
+        (source_root / "__main__.py").write_text(
+            "from disk_ha.schedule import main\nraise SystemExit(main())\n")
+        scheduler = staging / "disk-ha-schedule"
+        zipapp.create_archive(source_root, target=scheduler, interpreter="/usr/bin/python3")
+        scheduler.chmod(0o755)
+        scheduler.replace(root / "bin/disk-ha-schedule")
         package = root / "disk_ha"
         package.mkdir(exist_ok=True)
         package.chmod(0o755)
@@ -137,7 +145,8 @@ def install() -> None:
         staged_rule = Path(stream.name)
         stream.write(
             f"{DDISKHA.SERVICE_USER} ALL=(root) NOPASSWD: {DDISKHA.SYSTEMCTL} "
-            f"start --no-block {health_service.name}\n")
+            f"start --no-block {health_service.name}\n"
+            f'{DDISKHA.SERVICE_USER} ALL=(root) NOPASSWD: {root}/bin/disk-ha-schedule ""\n')
     try:
         staged_rule.chmod(0o440)
         subprocess.run([DDISKHA.VISUDO, "-cf", str(staged_rule)],
@@ -149,7 +158,6 @@ def install() -> None:
         "[Unit]\nDescription=disk-ha Web UI\nAfter=network.target\n\n"
         f"[Service]\nType=exec\nUser={DDISKHA.SERVICE_USER}\nGroup={DDISKHA.SERVICE_GROUP}\n"
         f"LoadCredential=database.env:{DDISKHA.DATABASE_ENV}\n"
-        f"LoadCredential=health.json:{configuration}\n"
         f"ExecStart={root}/bin/disk-ha-web --host {DDISKHA.WEB_HOST} --port {DDISKHA.WEB_PORT}\n"
         "Restart=on-failure\nRestartSec=2\n\n[Install]\nWantedBy=multi-user.target\n")
     service.chmod(0o644)
@@ -157,7 +165,13 @@ def install() -> None:
     systemctl("enable", service.name)
     with configuration.with_suffix(".lock").open("a") as stream:
         fcntl.flock(stream, fcntl.LOCK_EX)
-        HealthSchedule.apply(root, HealthConfiguration(configuration))
+        if upgrading:
+            installed = HealthSchedule.read()
+            values = json.loads(configuration.read_text())
+            values.update(enabled=installed["enabled"], expression=installed["expression"] or None)
+            HealthSchedule.save_configuration(configuration, values)
+        health = HealthConfiguration(configuration)
+        HealthSchedule.apply(root, health)
     if health.enabled:
         systemctl("enable", "--now", "cron.service")
     restart()
@@ -185,6 +199,7 @@ def uninstall() -> None:
         systemctl("daemon-reload")
     (root / "bin/disk-ha-web").unlink(missing_ok=True)
     (root / "bin/disk-ha-check").unlink(missing_ok=True)
+    (root / "bin/disk-ha-schedule").unlink(missing_ok=True)
     package = Path(DDISKHA.INSTALL_DIR) / "disk_ha"
     if package.exists():
         shutil.rmtree(package)

@@ -90,6 +90,35 @@ class WebTests(unittest.TestCase):
         self.assertIn(b"Cannot start check", raised.exception.read())
         raised.exception.close()
 
+    @patch("disk_ha.server.__main__.update_schedule",
+           return_value={"enabled": True, "expression": "*/20 * * * *"})
+    def test_schedule_update_and_validation_errors(self, update):
+        def post(body, origin=None):
+            return self.opener.open(Request(self.url + "/health/schedule", data=body,
+                                           headers={"Origin": origin or self.url,
+                                                    "Content-Type": "application/json"}), timeout=2)
+
+        with post(b'{"enabled":true,"expression":"*/20 * * * *"}') as response:
+            self.assertEqual(json.load(response), {"enabled": True, "expression": "*/20 * * * *"})
+        update.assert_called_once_with(True, "*/20 * * * *")
+        update.reset_mock()
+        for body in (b"{", b"[]", b'{"enabled":true}', b"x" * 1025):
+            with self.assertRaises(HTTPError) as raised:
+                post(body)
+            self.assertEqual(raised.exception.code, 400)
+            raised.exception.close()
+        update.assert_not_called()
+        with self.assertRaises(HTTPError) as raised:
+            post(b'{"enabled":true,"expression":"0 3 * * *"}', "http://other.example")
+        self.assertEqual(raised.exception.code, 403)
+        raised.exception.close()
+        for error, status in ((ValueError("Invalid cron expression"), 400), (OSError("cron denied"), 503)):
+            update.side_effect = error
+            with self.assertRaises(HTTPError) as raised:
+                post(b'{"enabled":true,"expression":"0 3 * * *"}')
+            self.assertEqual(raised.exception.code, status)
+            raised.exception.close()
+
     def test_packaged_server_serves_without_checkout(self):
         with tempfile.TemporaryDirectory(prefix="disk-ha-web-test-") as temporary:
             target = Path(temporary) / "prod"

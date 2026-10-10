@@ -28,6 +28,11 @@ class InstallationTests(unittest.TestCase):
         scheduling = patch.object(installer.HealthSchedule, "apply")
         self.scheduling = scheduling.start()
         self.addCleanup(scheduling.stop)
+        reading = patch.object(installer.HealthSchedule, "read", side_effect=lambda: {
+            "enabled": json.loads((self.target / "conf/health.json").read_text())["enabled"],
+            "expression": json.loads((self.target / "conf/health.json").read_text())["expression"] or ""})
+        self.reading = reading.start()
+        self.addCleanup(reading.stop)
         executable_check = patch.object(installer.os, "access", return_value=True)
         executable_check.start()
         self.addCleanup(executable_check.stop)
@@ -89,14 +94,15 @@ class InstallationTests(unittest.TestCase):
         self.assertIn(f"ExecStart={executable} --host 0.0.0.0 --port 23300", service.read_text())
         self.assertIn("User=diskha\nGroup=diskha", service.read_text())
         self.assertIn(f"LoadCredential=database.env:{installer.DDISKHA.DATABASE_ENV}", service.read_text())
-        self.assertIn(f"LoadCredential=health.json:{self.target}/conf/health.json", service.read_text())
+        self.assertNotIn("LoadCredential=health.json", service.read_text())
         health_service = Path(installer.DDISKHA.HEALTH_SERVICE_FILE)
         sudoers = Path(installer.DDISKHA.HEALTH_SUDOERS_FILE)
         self.assertIn("User=root", health_service.read_text())
         self.assertIn(f"ExecStart={self.target}/bin/disk-ha-check", health_service.read_text())
         self.assertEqual(sudoers.stat().st_mode & 0o777, 0o440)
         self.assertEqual(sudoers.read_text(),
-                         "diskha ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block disk-ha-health.service\n")
+                         "diskha ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block disk-ha-health.service\n"
+                         f'diskha ALL=(root) NOPASSWD: {self.target}/bin/disk-ha-schedule ""\n')
         self.control.assert_any_call("enable", service.name)
         self.restart.assert_called_once_with()
         self.assertEqual((self.target / "conf").stat().st_mode & 0o777, 0o700)
@@ -126,6 +132,7 @@ class InstallationTests(unittest.TestCase):
         self.assertFalse((self.target / "disk_ha").exists())
         self.assertFalse(executable.exists())
         self.assertFalse(checker.exists())
+        self.assertFalse((self.target / "bin/disk-ha-schedule").exists())
         self.scheduling.assert_any_call(self.target, None)
         self.assertFalse(service.exists())
         self.assertFalse(health_service.exists())
@@ -205,6 +212,20 @@ class InstallationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("monitoring is disabled", result.stdout)
         self.assertFalse((self.target / "data/health.json").exists())
+
+    def test_upgrade_retains_live_cron_schedule_and_external_removal(self):
+        installer.install()
+        config = self.target / "conf/health.json"
+        original_mail = json.loads(config.read_text())["mail"]
+        self.reading.side_effect = None
+        self.reading.return_value = {"enabled": True, "expression": "*/20 * * * *"}
+        installer.install()
+        self.assertEqual(json.loads(config.read_text())["expression"], "*/20 * * * *")
+        self.assertEqual(json.loads(config.read_text())["mail"], original_mail)
+        self.reading.return_value = {"enabled": False, "expression": ""}
+        installer.install()
+        self.assertFalse(json.loads(config.read_text())["enabled"])
+        self.assertFalse(self.scheduling.call_args.args[1].enabled)
 
     def test_wrappers_delegate_from_a_checkout_with_spaces(self):
         with tempfile.TemporaryDirectory(prefix="disk-ha-wrappers-") as temporary:

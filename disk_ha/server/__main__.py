@@ -1,12 +1,13 @@
 """Serve the disk-ha web interface."""
 
 import argparse
+import json
 import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from disk_ha.constants.DDISKHA import DDISKHA
 from disk_ha.server.DrivePage import render_page
-from disk_ha.interface.HealthControl import request_check
+from disk_ha.interface.HealthControl import request_check, update_schedule
 
 
 class WebHandler(BaseHTTPRequestHandler):
@@ -21,15 +22,20 @@ class WebHandler(BaseHTTPRequestHandler):
         self.serve()
 
     def do_POST(self) -> None:
-        if self.path != "/health/run":
+        if self.path not in ("/health/run", "/health/schedule"):
             self.respond(404, b"Not found.\n", "text/plain; charset=utf-8")
             return
         # Browser requests must come from this page, including on private networks.
         host = self.headers.get("Host", "")
         if (not host or self.headers.get("Origin") not in (f"http://{host}", f"https://{host}")
-                or self.headers.get("Content-Length", "0") != "0"
                 or self.headers.get("Transfer-Encoding")):
             self.respond(403, b"Request must come from this page.\n", "text/plain; charset=utf-8")
+            return
+        if self.path == "/health/schedule":
+            self.save_schedule()
+            return
+        if self.headers.get("Content-Length", "0") != "0":
+            self.respond(400, b"Unexpected request body.\n", "text/plain; charset=utf-8")
             return
         try:
             request_check()
@@ -39,6 +45,23 @@ class WebHandler(BaseHTTPRequestHandler):
         else:
             self.respond(202, b"Health check requested. Reload to view the completed result.\n",
                          "text/plain; charset=utf-8")
+
+    def save_schedule(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= 1024 or self.headers.get("Content-Type") != "application/json":
+                raise ValueError("Provide schedule settings as JSON, at most 1024 bytes.")
+            request = json.loads(self.rfile.read(length))
+            if not isinstance(request, dict) or set(request) != {"enabled", "expression"}:
+                raise ValueError("Provide enabled and expression fields.")
+            result = update_schedule(request["enabled"], request["expression"])
+        except (ValueError, UnicodeError) as error:
+            self.respond(400, (str(error) + "\n").encode(), "text/plain; charset=utf-8")
+        except (OSError, subprocess.SubprocessError):
+            self.respond(503, b"Cannot update schedule. Check cron permissions and retry.\n",
+                         "text/plain; charset=utf-8")
+        else:
+            self.respond(200, json.dumps(result).encode(), "application/json; charset=utf-8")
 
     def serve(self) -> None:
         path = self.path.split("?", 1)[0]

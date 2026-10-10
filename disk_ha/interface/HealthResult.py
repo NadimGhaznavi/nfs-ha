@@ -1,7 +1,7 @@
 """Atomically publish and validate the latest health result for the Web UI."""
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -15,7 +15,7 @@ class HealthResult:
         self.path = Path(path)
 
     def write(self, report: DiskCheckReport) -> None:
-        values = {"checked_at": datetime.now(timezone.utc).isoformat(),
+        values = {"checked_at": datetime.now().astimezone().isoformat(timespec="seconds"),
                   "disks": [asdict(disk) for disk in report.disks],
                   "notification_error": report.notification_error}
         with NamedTemporaryFile(mode="w", encoding="utf-8", dir=self.path.parent,

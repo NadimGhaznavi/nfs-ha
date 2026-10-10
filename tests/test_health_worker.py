@@ -1,12 +1,15 @@
 """Verify cron ownership, persisted results, permissions, and Web UI consumption."""
 
 from contextlib import redirect_stdout
+from datetime import datetime
 import fcntl
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -53,15 +56,38 @@ class HealthWorkerTests(unittest.TestCase):
         self.assertEqual([disk["disk"]["device_path"] for disk in result["disks"]], self.values["disks"])
         self.assertEqual(self.result.stat().st_mode & 0o777, 0o640)
         self.assertEqual(self.result.stat().st_gid, self.root.stat().st_gid)
-        self.assertIn("+00:00", result["checked_at"])
+        checked_at = datetime.fromisoformat(result["checked_at"])
+        self.assertIsNotNone(checked_at.tzinfo)
+        self.assertEqual(checked_at.microsecond, 0)
         with patch("disk_ha.server.DrivePage.DDISKHA.HEALTH_RESULT", str(self.result)), \
                 patch("disk_ha.server.DrivePage.read_usage", return_value=None):
             page = render_page().decode()
         self.assertIn("Disk Health", page)
-        self.assertIn(result["checked_at"], page)
+        self.assertIn(checked_at.astimezone().strftime("%Y-%m-%d %H:%M:%S"), page)
         self.assertIn("ata-primary", page)
         self.assertEqual(page.count("<td>PASS</td>"), 2)
         self.assertNotIn("{{health}}", page)
+
+    def test_old_utc_results_display_in_local_time_without_fractional_seconds(self):
+        self.worker(lambda disk: DiskHealth(disk))
+        result = HealthResult(self.result).read()
+        try:
+            with patch.dict(os.environ, {"TZ": "America/Toronto"}), \
+                    patch("disk_ha.server.DrivePage.DDISKHA.HEALTH_RESULT", str(self.result)):
+                time.tzset()
+                for timestamp, local in (("2026-01-02T02:03:04.123456+00:00", "2026-01-01 21:03:04"),
+                                         ("2026-07-02T02:03:04.123456+00:00", "2026-07-01 22:03:04")):
+                    result["checked_at"] = timestamp
+                    self.result.write_text(json.dumps(result))
+                    page = render_page().decode()
+                    self.assertIn(f'>{local}</time> (server time)', page)
+                    self.assertNotIn(".123456", page)
+                self.worker(lambda disk: DiskHealth(disk))
+                recorded = datetime.fromisoformat(HealthResult(self.result).read()["checked_at"])
+                self.assertEqual(recorded.utcoffset(), recorded.astimezone().utcoffset())
+                self.assertEqual(recorded.microsecond, 0)
+        finally:
+            time.tzset()
 
     def test_disk_failure_and_email_failure_are_persisted_and_html_escaped(self):
         status, email = self.worker(lambda disk: DiskHealth(disk, ("<failed & degraded>",)),
@@ -142,6 +168,52 @@ class HealthWorkerTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 HealthSchedule.apply(self.root, HealthConfiguration(self.config))
         self.assertEqual(command.call_count, 1)
+
+    def test_schedule_reads_cron_instead_of_saved_expression(self):
+        tab = "MAILTO=other@example.com\n15 2 * * * /other # unrelated\n"
+        tab += "*/20 6-18 * * 1-5 /checker # disk-ha-health-check\n"
+        with patch("disk_ha.interface.HealthSchedule.subprocess.run",
+                   return_value=SimpleNamespace(returncode=0, stdout=tab, stderr="")):
+            self.assertEqual(HealthSchedule.read(), {"enabled": True, "expression": "*/20 6-18 * * 1-5"})
+        with patch.object(HealthSchedule, "_crontab", return_value=""):
+            self.assertEqual(HealthSchedule.read(), {"enabled": False, "expression": ""})
+        with patch.object(HealthSchedule, "_crontab", return_value=tab + tab):
+            with self.assertRaisesRegex(ValueError, "Multiple"):
+                HealthSchedule.read()
+
+    def test_schedule_updates_preserve_other_jobs_and_roll_back_on_cron_failure(self):
+        conf = self.root / "conf"
+        conf.mkdir()
+        config = conf / "health.json"
+        config.write_text(json.dumps(self.values))
+        unrelated = "MAILTO=other@example.com\n15 2 * * * /other # unrelated\n"
+        tab = unrelated
+
+        def crontab(arguments, **kwargs):
+            nonlocal tab
+            if arguments[-1] == "-l":
+                return SimpleNamespace(returncode=0, stdout=tab, stderr="")
+            tab = kwargs["input"]
+            return SimpleNamespace(returncode=0)
+
+        with patch("disk_ha.interface.HealthSchedule.subprocess.run", side_effect=crontab):
+            self.assertEqual(HealthSchedule.update(self.root, True, "*/15 * * * *"),
+                             {"enabled": True, "expression": "*/15 * * * *"})
+            self.assertTrue(tab.startswith(unrelated))
+            self.assertEqual(HealthConfiguration(config).expression, "*/15 * * * *")
+            previous = config.read_bytes()
+            with patch.object(HealthSchedule, "apply", side_effect=OSError("cron denied")):
+                with self.assertRaises(OSError):
+                    HealthSchedule.update(self.root, True, "0 2 * * *")
+            self.assertEqual(json.loads(config.read_bytes()), json.loads(previous))
+            with config.with_suffix(".lock").open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with self.assertRaisesRegex(OSError, "active"):
+                    HealthSchedule.update(self.root, False, "0 2 * * *")
+            self.assertEqual(HealthSchedule.update(self.root, False, "*/15 * * * *"),
+                             {"enabled": False, "expression": ""})
+            self.assertEqual(tab, unrelated)
+            self.assertFalse(HealthConfiguration(config).enabled)
 
     def test_configuration_rejects_unsafe_or_incomplete_inputs(self):
         for expression in ("60 * * * *", "* 24 * * *", "* * 0 * *", "* * * 13 *",

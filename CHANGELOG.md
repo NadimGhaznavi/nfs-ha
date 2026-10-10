@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-10 @ 19:00
+
+In memory of the **Cave Bear**, the last of which died out around 24,000 years ago.
+
+### Changed
+
+- Last health-check times are recorded and displayed in server local time with
+  second precision.
+- Disk Health scheduling follows CMDB's Enabled, Cron Schedule, and Update controls,
+  populated from the live cron entry and retained across upgrades.
+
 ## [0.4.1] - 2026-10-10 @ 18:45
 
 In memory of the **Barbary Lions**, who died out in the 20th century.
