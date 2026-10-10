@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This release is in memory of the last **Dodo** who died in 1681.
+
 ### Added
 
 - Email Notification section showing the configured contact and an Email disk report
