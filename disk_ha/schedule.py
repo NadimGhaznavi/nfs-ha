@@ -1,4 +1,4 @@
-"""Root-only schedule helper; accept a bounded JSON request on standard input."""
+"""Root-only monitoring settings helper; accept a bounded JSON request on stdin."""
 
 import json
 import os
@@ -6,14 +6,18 @@ from pathlib import Path
 import subprocess
 import sys
 
-from disk_ha.constants.DDISKHA import DDISKHA
-from disk_ha.interface.HealthConfiguration import validate_expression
+from disk_ha.constants.DDiskHA import DDiskHA
+from disk_ha.interface.HealthConfiguration import HealthConfiguration, validate_expression
 from disk_ha.interface.HealthSchedule import HealthSchedule
 
 
 def dispatch(request: dict) -> dict:
     if request == {"action": "read"}:
         return HealthSchedule.read()
+    if request == {"action": "contact"}:
+        configuration = HealthConfiguration(Path(DDiskHA.INSTALL_DIR) / "conf/health.json")
+        return {"recipient": (configuration.notification.recipient
+                              if configuration.notification is not None else None)}
     if (isinstance(request, dict) and set(request) == {"action", "enabled", "expression"}
             and request["action"] == "update"):
         if type(request["enabled"]) is not bool or not isinstance(request["expression"], str):
@@ -21,9 +25,9 @@ def dispatch(request: dict) -> dict:
         if request["expression"] or request["enabled"]:
             validate_expression(request["expression"])
         if request["enabled"]:
-            subprocess.run([DDISKHA.SYSTEMCTL, "enable", "--now", "cron.service"],
+            subprocess.run([DDiskHA.SYSTEMCTL, "enable", "--now", "cron.service"],
                            capture_output=True, check=True, timeout=30)
-        return HealthSchedule.update(Path(DDISKHA.INSTALL_DIR), request["enabled"], request["expression"])
+        return HealthSchedule.update(Path(DDiskHA.INSTALL_DIR), request["enabled"], request["expression"])
     raise ValueError("Invalid schedule request.")
 
 

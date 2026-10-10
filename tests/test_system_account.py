@@ -5,14 +5,14 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.interface.SystemAccount import SystemAccount
 
 
 class AccountTests(unittest.TestCase):
     def setUp(self):
-        self.account = SimpleNamespace(pw_uid=998, pw_gid=998, pw_shell=DDISKHA.NOLOGIN,
-                                       pw_dir=DDISKHA.INSTALL_DIR)
+        self.account = SimpleNamespace(pw_uid=998, pw_gid=998, pw_shell=DDiskHA.NOLOGIN,
+                                       pw_dir=DDiskHA.INSTALL_DIR)
         self.group = SimpleNamespace(gr_gid=998)
 
     def test_missing_account_and_group_are_created_without_login_or_home_creation(self):
@@ -21,10 +21,10 @@ class AccountTests(unittest.TestCase):
                 patch("pwd.getpwnam", side_effect=[KeyError(), self.account]), \
                 patch("disk_ha.interface.SystemAccount.subprocess.run") as run:
             self.assertEqual(SystemAccount.provision(), self.account)
-        self.assertEqual(run.call_args_list[0].args[0], [DDISKHA.GROUPADD, "--system", "diskha"])
+        self.assertEqual(run.call_args_list[0].args[0], [DDiskHA.GROUPADD, "--system", "diskha"])
         command = run.call_args_list[1].args[0]
         self.assertIn("--no-create-home", command)
-        self.assertIn(DDISKHA.NOLOGIN, command)
+        self.assertIn(DDiskHA.NOLOGIN, command)
         self.assertIn("--system", command)
         for call in run.call_args_list:
             self.assertEqual(call.kwargs, {"check": True, "timeout": 30})

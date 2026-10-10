@@ -5,7 +5,7 @@ import os
 import pwd
 import subprocess
 
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 
 
 class SystemAccount:
@@ -14,22 +14,22 @@ class SystemAccount:
         if os.geteuid() != 0:
             raise PermissionError("Run account provisioning as root.")
         try:
-            group = grp.getgrnam(DDISKHA.SERVICE_GROUP)
+            group = grp.getgrnam(DDiskHA.SERVICE_GROUP)
         except KeyError:
-            subprocess.run([DDISKHA.GROUPADD, "--system", DDISKHA.SERVICE_GROUP],
+            subprocess.run([DDiskHA.GROUPADD, "--system", DDiskHA.SERVICE_GROUP],
                            check=True, timeout=30)
-            group = grp.getgrnam(DDISKHA.SERVICE_GROUP)
+            group = grp.getgrnam(DDiskHA.SERVICE_GROUP)
         if group.gr_gid == 0:
             raise ValueError("The service group must not be root.")
         try:
-            account = pwd.getpwnam(DDISKHA.SERVICE_USER)
+            account = pwd.getpwnam(DDiskHA.SERVICE_USER)
         except KeyError:
             subprocess.run(
-                [DDISKHA.USERADD, "--system", "--gid", DDISKHA.SERVICE_GROUP,
-                 "--home-dir", DDISKHA.INSTALL_DIR, "--no-create-home",
-                 "--shell", DDISKHA.NOLOGIN, DDISKHA.SERVICE_USER], check=True, timeout=30)
-            account = pwd.getpwnam(DDISKHA.SERVICE_USER)
+                [DDiskHA.USERADD, "--system", "--gid", DDiskHA.SERVICE_GROUP,
+                 "--home-dir", DDiskHA.INSTALL_DIR, "--no-create-home",
+                 "--shell", DDiskHA.NOLOGIN, DDiskHA.SERVICE_USER], check=True, timeout=30)
+            account = pwd.getpwnam(DDiskHA.SERVICE_USER)
         if (account.pw_uid == 0 or account.pw_gid != group.gr_gid
-                or account.pw_shell != DDISKHA.NOLOGIN or account.pw_dir != DDISKHA.INSTALL_DIR):
+                or account.pw_shell != DDiskHA.NOLOGIN or account.pw_dir != DDiskHA.INSTALL_DIR):
             raise ValueError("Existing diskha account must have the project home, diskha group, and nologin shell.")
         return account

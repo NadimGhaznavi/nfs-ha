@@ -5,7 +5,7 @@ import os
 import stat
 import subprocess
 
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.entity.Disk import Disk
 from disk_ha.entity.DiskHealth import DiskHealth
 
@@ -17,11 +17,17 @@ class SmartInspection:
         self.timeout = timeout
 
     def inspect(self, disk: Disk) -> DiskHealth:
+        return self._inspect(disk, ["-H", "-A"])
+
+    def inspect_verbose(self, disk: Disk) -> DiskHealth:
+        return self._inspect(disk, ["-x"])
+
+    def _inspect(self, disk: Disk, options: list[str]) -> DiskHealth:
         try:
             if not stat.S_ISBLK(os.stat(disk.device_path).st_mode):
                 return DiskHealth(disk, ("Device is missing or is not a block device.",))
             result = subprocess.run(
-                [DDISKHA.SMARTCTL, "-H", "-A", disk.device_path],
+                [DDiskHA.SMARTCTL, *options, disk.device_path],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, errors="replace", timeout=self.timeout, check=False)
         except (OSError, subprocess.TimeoutExpired) as error:
