@@ -169,6 +169,52 @@ class HealthWorkerTests(unittest.TestCase):
                 HealthSchedule.apply(self.root, HealthConfiguration(self.config))
         self.assertEqual(command.call_count, 1)
 
+    def test_schedule_reads_cron_instead_of_saved_expression(self):
+        tab = "MAILTO=other@example.com\n15 2 * * * /other # unrelated\n"
+        tab += "*/20 6-18 * * 1-5 /checker # disk-ha-health-check\n"
+        with patch("disk_ha.interface.HealthSchedule.subprocess.run",
+                   return_value=SimpleNamespace(returncode=0, stdout=tab, stderr="")):
+            self.assertEqual(HealthSchedule.read(), {"enabled": True, "expression": "*/20 6-18 * * 1-5"})
+        with patch.object(HealthSchedule, "_crontab", return_value=""):
+            self.assertEqual(HealthSchedule.read(), {"enabled": False, "expression": ""})
+        with patch.object(HealthSchedule, "_crontab", return_value=tab + tab):
+            with self.assertRaisesRegex(ValueError, "Multiple"):
+                HealthSchedule.read()
+
+    def test_schedule_updates_preserve_other_jobs_and_roll_back_on_cron_failure(self):
+        conf = self.root / "conf"
+        conf.mkdir()
+        config = conf / "health.json"
+        config.write_text(json.dumps(self.values))
+        unrelated = "MAILTO=other@example.com\n15 2 * * * /other # unrelated\n"
+        tab = unrelated
+
+        def crontab(arguments, **kwargs):
+            nonlocal tab
+            if arguments[-1] == "-l":
+                return SimpleNamespace(returncode=0, stdout=tab, stderr="")
+            tab = kwargs["input"]
+            return SimpleNamespace(returncode=0)
+
+        with patch("disk_ha.interface.HealthSchedule.subprocess.run", side_effect=crontab):
+            self.assertEqual(HealthSchedule.update(self.root, True, "*/15 * * * *"),
+                             {"enabled": True, "expression": "*/15 * * * *"})
+            self.assertTrue(tab.startswith(unrelated))
+            self.assertEqual(HealthConfiguration(config).expression, "*/15 * * * *")
+            previous = config.read_bytes()
+            with patch.object(HealthSchedule, "apply", side_effect=OSError("cron denied")):
+                with self.assertRaises(OSError):
+                    HealthSchedule.update(self.root, True, "0 2 * * *")
+            self.assertEqual(json.loads(config.read_bytes()), json.loads(previous))
+            with config.with_suffix(".lock").open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with self.assertRaisesRegex(OSError, "active"):
+                    HealthSchedule.update(self.root, False, "0 2 * * *")
+            self.assertEqual(HealthSchedule.update(self.root, False, "*/15 * * * *"),
+                             {"enabled": False, "expression": ""})
+            self.assertEqual(tab, unrelated)
+            self.assertFalse(HealthConfiguration(config).enabled)
+
     def test_configuration_rejects_unsafe_or_incomplete_inputs(self):
         for expression in ("60 * * * *", "* 24 * * *", "* * 0 * *", "* * * 13 *",
                            "* * * * 8", "* * * * *\n", "@daily", "* * * * * /command",
