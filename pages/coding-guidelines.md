@@ -103,8 +103,12 @@ current installer deploys the Python package, readable CMDB metadata, and a
 bundled Web UI executable managed by `disk-ha-web.service`. The Web UI serves a
 title bar and a Drive Configuration table on port `23300` as the persistent `diskha` Linux account. Installation
 provisions the local `diskha` MariaDB database and account, preserving credentials
-in `conf/database.env`. Disk workflows, application tables, and scheduling
-have not been implemented. See the
+in `conf/database.env`. Root-run health checks use a configured cron entry and
+save results in `data/health.json` for the Web UI to read. The data directory is
+root-owned with group `diskha` and mode `0750`; health results use mode `0640`.
+The owner selected daily checks at 14:00 server time and the existing script's
+email settings; deployment settings remain configurable and survive upgrades.
+Synchronization and application tables have not been implemented. See the
 [web interface guide]({{ site.baseurl }}{% link pages/web-interface.md %})
 for account permissions and credential delivery.
 

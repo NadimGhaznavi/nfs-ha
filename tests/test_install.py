@@ -3,6 +3,7 @@
 from contextlib import redirect_stdout
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -24,6 +25,12 @@ class InstallationTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(prefix="disk-ha-install-test-")
         self.addCleanup(temporary.cleanup)
         self.target = Path(temporary.name) / "prod"
+        scheduling = patch.object(installer.HealthSchedule, "apply")
+        self.scheduling = scheduling.start()
+        self.addCleanup(scheduling.stop)
+        executable_check = patch.object(installer.os, "access", return_value=True)
+        executable_check.start()
+        self.addCleanup(executable_check.stop)
         for target, value in (("SystemAccount.provision", SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid())),
                               ("DatabaseProvisioning.provision", None)):
             provisioning = patch.object(getattr(installer, target.split('.')[0]), target.split('.')[1],
@@ -67,8 +74,13 @@ class InstallationTests(unittest.TestCase):
         self.assertIn(f"LoadCredential=database.env:{installer.DDISKHA.DATABASE_ENV}", service.read_text())
         self.control.assert_any_call("enable", service.name)
         self.restart.assert_called_once_with()
-        for name in ("conf", "data"):
-            self.assertEqual((self.target / name).stat().st_mode & 0o777, 0o700)
+        self.assertEqual((self.target / "conf").stat().st_mode & 0o777, 0o700)
+        self.assertEqual((self.target / "data").stat().st_mode & 0o777, 0o750)
+        self.assertEqual((self.target / "data/health.log").stat().st_mode & 0o777, 0o640)
+        self.assertEqual((self.target / "conf/health.json").stat().st_mode & 0o777, 0o600)
+        checker = self.target / "bin/disk-ha-check"
+        self.assertTrue(checker.exists())
+        self.assertEqual(checker.stat().st_mode & 0o777, 0o755)
         result = subprocess.run(
             ["/usr/bin/python3", "-B", "-c",
              "from disk_ha.constants.DDISKHA import DDISKHA; print(DDISKHA.VERSION)"],
@@ -88,6 +100,8 @@ class InstallationTests(unittest.TestCase):
         installer.uninstall()
         self.assertFalse((self.target / "disk_ha").exists())
         self.assertFalse(executable.exists())
+        self.assertFalse(checker.exists())
+        self.scheduling.assert_any_call(self.target, None)
         self.assertFalse(service.exists())
         self.control.assert_any_call("disable", "--now", service.name)
         for path, content in preserved.items():
@@ -103,6 +117,55 @@ class InstallationTests(unittest.TestCase):
                 installer.install()
         self.assertEqual(constants.read_bytes(), original)
         self.assertEqual(list(self.target.glob(".disk-ha-install-*")), [])
+
+    def test_health_configuration_results_and_logs_survive_upgrade_and_removal(self):
+        installer.install()
+        configuration = self.target / "conf/health.json"
+        values = json.loads(configuration.read_text())
+        self.assertTrue(values["enabled"])
+        self.assertEqual(values["expression"], "0 14 * * *")
+        self.assertEqual(values["mail"]["config_path"], "/root/.msmtprc")
+        values.update(enabled=True, expression="*/30 * * * *",
+                      mail={"recipient": "operator@example.com", "sender": "disk@example.com",
+                            "config_path": "/tmp/mail.conf", "timeout": 10})
+        configuration.write_text(json.dumps(values))
+        result = self.target / "data/health.json"
+        result.write_text("saved health result")
+        log = self.target / "data/health.log"
+        log.write_text("saved health log")
+        with patch.object(installer.os, "access", return_value=True):
+            installer.install()
+        self.assertTrue(self.scheduling.call_args.args[1].enabled)
+        self.assertEqual(self.scheduling.call_args.args[1].expression, "*/30 * * * *")
+        self.control.assert_any_call("enable", "--now", "cron.service")
+        self.assertEqual(json.loads(configuration.read_text()), values)
+        self.assertEqual(result.read_text(), "saved health result")
+        self.assertEqual(log.read_text(), "saved health log")
+        installer.uninstall()
+        self.assertEqual(json.loads(configuration.read_text()), values)
+        self.assertEqual(result.read_text(), "saved health result")
+        self.assertEqual(log.read_text(), "saved health log")
+
+    def test_health_checker_archive_runs_without_checkout_when_disabled(self):
+        installer.install()
+        configuration = self.target / "conf/health.json"
+        values = json.loads(configuration.read_text())
+        values["enabled"] = False
+        configuration.write_text(json.dumps(values))
+        checker = self.target / "bin/disk-ha-check"
+        result = subprocess.run(["/usr/bin/python3", "-B", str(checker), "--help"],
+                                cwd=self.target, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--config", result.stdout)
+        # Invoke the runner function directly to avoid requiring root in the test.
+        result = subprocess.run(
+            ["/usr/bin/python3", "-B", "-c",
+             "from pathlib import Path; from disk_ha.health import run; "
+             "raise SystemExit(run(Path('conf/health.json'), Path('data/health.json')))"],
+            cwd=self.target, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("monitoring is disabled", result.stdout)
+        self.assertFalse((self.target / "data/health.json").exists())
 
     def test_wrappers_delegate_from_a_checkout_with_spaces(self):
         with tempfile.TemporaryDirectory(prefix="disk-ha-wrappers-") as temporary:

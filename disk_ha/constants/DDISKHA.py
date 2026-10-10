@@ -4,10 +4,10 @@ from typing import Final
 
 
 class DDISKHA:
-    VERSION: Final[str] = "0.3.4"
+    VERSION: Final[str] = "0.4.0"
     CMDB_SUBTYPE: Final[str] = "Disk Monitoring and Mirroring"
     CMDB_SUPPLIER: Final[str] = "Nadim-Daniel"
-    CMDB_CODENAME: Final[str] = "Zofia"
+    CMDB_CODENAME: Final[str] = "aurochs"
     INSTALL_DIR: Final[str] = "/opt/prod/disk-ha"
     WEB_HOST: Final[str] = "0.0.0.0"
     WEB_PORT: Final[int] = 23300
@@ -25,3 +25,8 @@ class DDISKHA:
     DATABASE_USER: Final[str] = "diskha"
     DATABASE_ENV: Final[str] = "/opt/prod/disk-ha/conf/database.env"
     DATABASE_CONNECT_TIMEOUT: Final[int] = 5
+    SMARTCTL: Final[str] = "/usr/sbin/smartctl"
+    MSMTP: Final[str] = "/usr/bin/msmtp"
+    CRONTAB: Final[str] = "/usr/bin/crontab"
+    HEALTH_CONFIG: Final[str] = "/opt/prod/disk-ha/conf/health.json"
+    HEALTH_RESULT: Final[str] = "/opt/prod/disk-ha/data/health.json"

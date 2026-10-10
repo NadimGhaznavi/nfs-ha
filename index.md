@@ -58,15 +58,16 @@ project's scope.
 
 ## Decisions still to make
 
-- Disk health check frequency.
 - Synchronization frequency.
-- Notification settings, including whether to retain the email destination in
-  the existing health-check script.
 
 The [web interface]({{ site.baseurl }}{% link pages/web-interface.md %}) currently
 displays a title bar and a Drive Configuration table with capacity and usage
-in TB for both mounted disks on port `23300`. Disk monitoring and synchronization
-are not yet implemented.
+in TB for both mounted disks on port `23300`.
+[Disk health]({{ site.baseurl }}{% link pages/disk-health.md %}) runs through a
+configured cron job and saves results in a flat JSON file displayed by the Web UI.
+The initial schedule checks daily at 14:00 server time and retains the existing
+script's email settings. Installed settings are preserved on upgrade.
+Scheduled synchronization is not yet implemented.
 
 ## Development
 
