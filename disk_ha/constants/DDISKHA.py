@@ -4,10 +4,10 @@ from typing import Final
 
 
 class DDISKHA:
-    VERSION: Final[str] = "0.4.0"
+    VERSION: Final[str] = "0.4.1"
     CMDB_SUBTYPE: Final[str] = "Disk Monitoring and Mirroring"
     CMDB_SUPPLIER: Final[str] = "Nadim-Daniel"
-    CMDB_CODENAME: Final[str] = "aurochs"
+    CMDB_CODENAME: Final[str] = "Barbary Lion"
     INSTALL_DIR: Final[str] = "/opt/prod/disk-ha"
     WEB_HOST: Final[str] = "0.0.0.0"
     WEB_PORT: Final[int] = 23300
@@ -30,3 +30,7 @@ class DDISKHA:
     CRONTAB: Final[str] = "/usr/bin/crontab"
     HEALTH_CONFIG: Final[str] = "/opt/prod/disk-ha/conf/health.json"
     HEALTH_RESULT: Final[str] = "/opt/prod/disk-ha/data/health.json"
+    HEALTH_SERVICE_FILE: Final[str] = "/etc/systemd/system/disk-ha-health.service"
+    HEALTH_SUDOERS_FILE: Final[str] = "/etc/sudoers.d/disk-ha-health"
+    SUDO: Final[str] = "/usr/bin/sudo"
+    VISUDO: Final[str] = "/usr/sbin/visudo"

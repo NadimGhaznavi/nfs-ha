@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-10 @ 18:45
+
+In memory of the **Barbary Lions**, who died out in the 20th century.
+
+### Added
+
+- Disk Health panel shows the configured cron schedule and a Run Now button
+  to request a background health check.
+
 ## [0.4.0] - 2026-10-10 @ 18:02
 
 In memory of the **Aurochs** that went extinct in 1627.

@@ -65,6 +65,8 @@ displays a title bar and a Drive Configuration table with capacity and usage
 in TB for both mounted disks on port `23300`.
 [Disk health]({{ site.baseurl }}{% link pages/disk-health.md %}) runs through a
 configured cron job and saves results in a flat JSON file displayed by the Web UI.
+The Disk Health panel displays the configured cron schedule and provides **Run Now**
+for a background health check.
 The initial schedule checks daily at 14:00 server time and retains the existing
 script's email settings. Installed settings are preserved on upgrade.
 Scheduled synchronization is not yet implemented.

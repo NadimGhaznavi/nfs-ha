@@ -16,6 +16,10 @@ failed usage readings display “Unavailable”.
 The Disk Health panel reads the latest saved check results and displays their
 UTC timestamp, each disk's status and details, and email delivery failures.
 No recorded result and unreadable or corrupt results have explicit messages.
+The panel shows the configured cron expression in server time and whether monitoring
+is enabled. Click **Run Now** to request a background health check, then reload
+to see its completed result. Checks retain their email alerts and overlap protection.
+The button is disabled when monitoring is disabled or settings are unavailable.
 See [disk health]({{ site.baseurl }}{% link pages/disk-health.md %}) for scheduling.
 It listens on all IPv4 interfaces and requires no third-party Python packages.
 
@@ -26,6 +30,7 @@ cron with the `crontab` command, and a running local MariaDB server with the
 `mariadb` client, run from the checkout. Enabled monitoring also needs `smartctl`
 and `msmtp` with a configured credential file.
 Root must be able to connect to MariaDB through Unix socket authentication.
+Manual checks also require `sudo` and `visudo`.
 
 ```sh
 sudo scripts/install.sh
@@ -46,6 +51,10 @@ shell and no separate home directory. Application code stays root-owned;
 `/opt/prod/disk-ha/data/` belongs to root and the `diskha` group with mode `0750`.
 Root runs scheduled health checks and writes results with mode `0640`;
 the Web UI account has read access.
+Systemd supplies a private copy of `health.json` for displaying monitoring settings.
+The root-owned `disk-ha-health.service` runs manual checks. A validated rule in
+`/etc/sudoers.d/disk-ha-health` lets `diskha` start only that service.
+The Web UI is intended for a trusted network; users with page access can request checks.
 
 Following the BMDynIP provisioning pattern, installation creates:
 

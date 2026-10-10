@@ -62,11 +62,42 @@ class WebTests(unittest.TestCase):
             self.assertEqual(raised.exception.code, 404)
             raised.exception.close()
 
+    @patch("disk_ha.server.__main__.request_check")
+    def test_manual_check_accepts_only_same_origin_post(self, check):
+        with self.opener.open(Request(self.url + "/health/run", data=b"",
+                                      headers={"Origin": self.url}), timeout=2) as response:
+            self.assertEqual(response.status, 202)
+        check.assert_called_once_with()
+        check.reset_mock()
+        for origin in (None, "http://other.example", "null", "http://[", self.url + "/other"):
+            headers = {} if origin is None else {"Origin": origin}
+            with self.assertRaises(HTTPError) as raised:
+                self.opener.open(Request(self.url + "/health/run", data=b"", headers=headers), timeout=2)
+            self.assertEqual(raised.exception.code, 403)
+            raised.exception.close()
+        check.assert_not_called()
+        with self.assertRaises(HTTPError) as raised:
+            self.opener.open(self.url + "/health/run", timeout=2)
+        self.assertEqual(raised.exception.code, 404)
+        raised.exception.close()
+
+    @patch("disk_ha.server.__main__.request_check", side_effect=OSError("denied"))
+    def test_manual_check_reports_start_failure(self, check):
+        with self.assertRaises(HTTPError) as raised:
+            self.opener.open(Request(self.url + "/health/run", data=b"",
+                                      headers={"Origin": self.url}), timeout=2)
+        self.assertEqual(raised.exception.code, 503)
+        self.assertIn(b"Cannot start check", raised.exception.read())
+        raised.exception.close()
+
     def test_packaged_server_serves_without_checkout(self):
         with tempfile.TemporaryDirectory(prefix="disk-ha-web-test-") as temporary:
             target = Path(temporary) / "prod"
             with patch.object(installer.DDISKHA, "INSTALL_DIR", str(target)), \
                     patch.object(installer.DDISKHA, "WEB_SERVICE_FILE", str(Path(temporary) / "service")), \
+                    patch.object(installer.DDISKHA, "HEALTH_SERVICE_FILE", str(Path(temporary) / "health.service")), \
+                    patch.object(installer.DDISKHA, "HEALTH_SUDOERS_FILE", str(Path(temporary) / "sudoers")), \
+                    patch.object(installer.subprocess, "run"), \
                     patch.object(installer.SystemAccount, "provision",
                                  return_value=SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid())), \
                     patch.object(installer.DatabaseProvisioning, "provision"), \
