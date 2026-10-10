@@ -23,6 +23,10 @@
     .masthead p { margin: .35rem 0 0; font-size: .85rem; color: #adc5c4; }
     main { padding: 1.5rem 2rem; }
     .panel { border: 1px solid #345155; border-radius: .4rem; padding: 1rem 1.5rem; }
+    .panel + .panel { margin-top: 1.5rem; }
+    .health { overflow-x: auto; }
+    .health th:not(:first-child), .health td { text-align: left; }
+    .health td { overflow-wrap: anywhere; }
     h2 { font-size: 1.15rem; margin: 0 0 1rem; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: .8rem; border-bottom: 1px solid #345155; }
@@ -36,6 +40,13 @@
     @media (max-width: 600px) {
       .masthead, main, .panel { padding: 1rem; }
       th, td { padding: .6rem .4rem; }
+      .health table, .health tbody, .health tr, .health th, .health td { display: block; }
+      .health thead { display: none; }
+      .health tbody th { font-weight: 700; }
+      .health tbody th, .health tbody td { border-bottom: 0; padding: .35rem 0; }
+      .health tbody tr { padding: .75rem 0; border-bottom: 1px solid #345155; }
+      .health tbody tr:last-child { border-bottom: 0; }
+      .health td:nth-child(2)::before { content: "Health: "; }
     }
   </style>
 </head>
@@ -54,6 +65,10 @@
           <tr><th scope="row">Disk 2</th><td>{{disk2_capacity}}</td><td>{{disk2_usage}}</td></tr>
         </tbody>
       </table>
+    </section>
+    <section class="panel health" aria-labelledby="health-heading">
+      <h2 id="health-heading">Disk Health</h2>
+      {{health}}
     </section>
   </main>
 </body>

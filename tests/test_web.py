@@ -70,6 +70,8 @@ class WebTests(unittest.TestCase):
                     patch.object(installer.SystemAccount, "provision",
                                  return_value=SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid())), \
                     patch.object(installer.DatabaseProvisioning, "provision"), \
+                    patch.object(installer.HealthSchedule, "apply"), \
+                    patch.object(installer.os, "access", return_value=True), \
                     patch.object(installer, "systemctl"), patch.object(installer, "restart"), \
                     redirect_stdout(io.StringIO()):
                 installer.install()
