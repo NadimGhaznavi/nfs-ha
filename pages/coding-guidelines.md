@@ -106,6 +106,8 @@ provisions the local `diskha` MariaDB database and account, preserving credentia
 in `conf/database.env`. Root-run health checks use a configured cron entry and
 save results in `data/health.json` for the Web UI to read. The data directory is
 root-owned with group `diskha` and mode `0750`; health results use mode `0640`.
+The Web UI displays the configured cron expression and can request the root-owned
+manual health-check service through one permitted sudo command.
 The owner selected daily checks at 14:00 server time and the existing script's
 email settings; deployment settings remain configurable and survive upgrades.
 Synchronization and application tables have not been implemented. See the
