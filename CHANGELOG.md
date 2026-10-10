@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+In memory of the **Cave Bear**, the last of which died out around 24,000 years ago.
+
 ### Changed
 
 - Last health-check times are recorded and displayed in server local time with
