@@ -28,6 +28,9 @@
     .health th:not(:first-child), .health td { text-align: left; }
     .health td { overflow-wrap: anywhere; }
     h2 { font-size: 1.15rem; margin: 0 0 1rem; }
+    button { background: #83d5c5; color: #11191c; border: 0; border-radius: .3rem;
+             padding: .6rem 1rem; font: inherit; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: default; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: .8rem; border-bottom: 1px solid #345155; }
     thead th { background: #1a2a2e; }
@@ -68,8 +71,25 @@
     </section>
     <section class="panel health" aria-labelledby="health-heading">
       <h2 id="health-heading">Disk Health</h2>
+      {{schedule}}
       {{health}}
     </section>
   </main>
+  <script>
+    const button = document.getElementById('run-now');
+    if (button) button.addEventListener('click', async () => {
+      const status = document.getElementById('run-status');
+      button.disabled = true;
+      status.textContent = 'Requesting health check…';
+      try {
+        const response = await fetch('/health/run', { method: 'POST' });
+        status.textContent = await response.text();
+      } catch (error) {
+        status.textContent = 'Request failed. Reload the page and try again.';
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>

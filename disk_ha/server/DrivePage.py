@@ -7,6 +7,7 @@ from pathlib import Path
 from disk_ha.constants.DDISKHA import DDISKHA
 from disk_ha.interface.HealthResult import HealthResult
 from disk_ha.interface.DriveUsage import read_usage
+from disk_ha.interface.HealthControl import configuration
 
 
 def render_page() -> bytes:
@@ -25,7 +26,21 @@ def render_page() -> bytes:
         page = page.replace(f"{{{{disk{number}_capacity}}}}", capacity)
         page = page.replace(f"{{{{disk{number}_usage}}}}", used)
     page = page.replace("{{health}}", render_health())
+    page = page.replace("{{schedule}}", render_schedule())
     return page.encode("utf-8")
+
+
+def render_schedule() -> str:
+    try:
+        settings = configuration()
+    except (OSError, ValueError):
+        return '<p>Cron schedule unavailable.</p><button disabled>Run Now</button>'
+    state = "Enabled" if settings.enabled else "Disabled"
+    expression = escape(settings.expression or "Not configured")
+    disabled = "" if settings.enabled else " disabled"
+    return (f'<p>Cron schedule: <code>{expression}</code> (server time). {state}.</p>'
+            f'<button id="run-now" type="button"{disabled}>Run Now</button>'
+            '<p id="run-status" role="status" aria-live="polite"></p>')
 
 
 def render_health() -> str:

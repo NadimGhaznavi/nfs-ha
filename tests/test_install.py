@@ -41,6 +41,23 @@ class InstallationTests(unittest.TestCase):
                                str(Path(temporary.name) / "disk-ha-web.service"))
         service.start()
         self.addCleanup(service.stop)
+        for name, filename in (("HEALTH_SERVICE_FILE", "disk-ha-health.service"),
+                               ("HEALTH_SUDOERS_FILE", "disk-ha-health")):
+            setting = patch.object(installer.DDISKHA, name, str(Path(temporary.name) / filename))
+            setting.start()
+            self.addCleanup(setting.stop)
+        original_run = subprocess.run
+        validation = patch.object(installer.subprocess, "run", wraps=subprocess.run)
+        self.commands = validation.start()
+        self.addCleanup(validation.stop)
+
+        def run_command(arguments, **kwargs):
+            if arguments[0] == installer.DDISKHA.VISUDO:
+                return SimpleNamespace(returncode=0)
+            return original_run(arguments, **kwargs)
+
+        # Preserve real archive checks while simulating privileged validation.
+        self.commands.side_effect = run_command
         control = patch.object(installer, "systemctl")
         self.control = control.start()
         self.addCleanup(control.stop)
@@ -72,6 +89,14 @@ class InstallationTests(unittest.TestCase):
         self.assertIn(f"ExecStart={executable} --host 0.0.0.0 --port 23300", service.read_text())
         self.assertIn("User=diskha\nGroup=diskha", service.read_text())
         self.assertIn(f"LoadCredential=database.env:{installer.DDISKHA.DATABASE_ENV}", service.read_text())
+        self.assertIn(f"LoadCredential=health.json:{self.target}/conf/health.json", service.read_text())
+        health_service = Path(installer.DDISKHA.HEALTH_SERVICE_FILE)
+        sudoers = Path(installer.DDISKHA.HEALTH_SUDOERS_FILE)
+        self.assertIn("User=root", health_service.read_text())
+        self.assertIn(f"ExecStart={self.target}/bin/disk-ha-check", health_service.read_text())
+        self.assertEqual(sudoers.stat().st_mode & 0o777, 0o440)
+        self.assertEqual(sudoers.read_text(),
+                         "diskha ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block disk-ha-health.service\n")
         self.control.assert_any_call("enable", service.name)
         self.restart.assert_called_once_with()
         self.assertEqual((self.target / "conf").stat().st_mode & 0o777, 0o700)
@@ -103,6 +128,8 @@ class InstallationTests(unittest.TestCase):
         self.assertFalse(checker.exists())
         self.scheduling.assert_any_call(self.target, None)
         self.assertFalse(service.exists())
+        self.assertFalse(health_service.exists())
+        self.assertFalse(sudoers.exists())
         self.control.assert_any_call("disable", "--now", service.name)
         for path, content in preserved.items():
             self.assertEqual(path.read_bytes(), content)
@@ -117,6 +144,18 @@ class InstallationTests(unittest.TestCase):
                 installer.install()
         self.assertEqual(constants.read_bytes(), original)
         self.assertEqual(list(self.target.glob(".disk-ha-install-*")), [])
+
+    def test_invalid_sudo_rule_keeps_previous_permission_and_cleans_candidate(self):
+        installer.install()
+        rule = Path(installer.DDISKHA.HEALTH_SUDOERS_FILE)
+        previous = rule.read_bytes()
+        self.restart.reset_mock()
+        self.commands.side_effect = subprocess.CalledProcessError(1, [installer.DDISKHA.VISUDO])
+        with self.assertRaises(subprocess.CalledProcessError):
+            installer.install()
+        self.assertEqual(rule.read_bytes(), previous)
+        self.assertEqual(list(rule.parent.glob(".disk-ha-health-*")), [])
+        self.restart.assert_not_called()
 
     def test_health_configuration_results_and_logs_survive_upgrade_and_removal(self):
         installer.install()

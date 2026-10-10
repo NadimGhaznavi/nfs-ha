@@ -53,8 +53,12 @@ atomically. It stores a UTC timestamp, both disks' SMART results and raw output,
 and any notification failure. The result belongs to root and the `diskha` group
 with mode `0640`; `data/` is root-owned with mode `0750`, so the Web UI can read
 results without changing them. The Web UI reads this file on each page request
-and shows the last recorded result and timestamp. It does not execute disk checks
-or access mail credentials. Missing and corrupt files have explicit display states.
+and shows the last recorded result and timestamp, along with the configured cron
+expression. **Run Now** requests the root-owned `disk-ha-health.service` in the
+background; reload the page after the check completes. The service uses the same
+configuration, result file, overlap lock, and log as cron. Disabled monitoring
+also prevents manual checks. The Web UI does not access mail credentials.
+Missing and corrupt files have explicit display states.
 
 Cron appends reports, skipped-run messages, and command failures to
 `data/health.log`. A disabled or overlapping run preserves the previous result.
@@ -62,4 +66,4 @@ A configuration or persistence failure exits with status 1 and leaves the last
 completed result in place; check its timestamp and the log.
 Mail credentials stay in the external msmtp file and are not logged.
 Upgrade and removal preserve configuration, results, and logs. Removal deletes
-the named cron entry and checker executable.
+the named cron entry, manual-check service, sudo permission, and checker executable.
