@@ -4,10 +4,10 @@ from typing import Final
 
 
 class DDISKHA:
-    VERSION: Final[str] = "0.3.0"
+    VERSION: Final[str] = "0.3.2"
     CMDB_SUBTYPE: Final[str] = "Disk Monitoring and Mirroring"
     CMDB_SUPPLIER: Final[str] = "Nadim-Daniel"
-    CMDB_CODENAME: Final[str] = "yak"
+    CMDB_CODENAME: Final[str] = "Yvonne"
     INSTALL_DIR: Final[str] = "/opt/prod/disk-ha"
     WEB_HOST: Final[str] = "0.0.0.0"
     WEB_PORT: Final[int] = 23300
