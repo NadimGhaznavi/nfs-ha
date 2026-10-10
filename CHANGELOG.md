@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Dark teal web interface title bar with the caption “Vigilent since October 2026”.
+
 ## [0.3.0] - 2026-10-08 @ 18:03
 
 ### Changed

@@ -40,7 +40,7 @@ class WebTests(unittest.TestCase):
         cls.server.server_close()
         cls.thread.join(timeout=5)
 
-    def test_blank_page_and_head(self):
+    def test_page_and_head(self):
         expected = (ROOT / "disk_ha/server/static/index.html").read_bytes()
         with self.opener.open(self.url + "/?test=1", timeout=2) as response:
             self.assertEqual(response.status, 200)
