@@ -6,7 +6,8 @@ layout: single
 
 [Documentation index]({{ site.baseurl }}{% link index.md %})
 
-The web interface currently serves a blank page at `http://<server>:23300/`.
+The web interface at `http://<server>:23300/` displays a dark teal title bar
+with the caption “Vigilent since October 2026” and an empty content area.
 It listens on all IPv4 interfaces and requires no third-party Python packages.
 
 ## Install and manage
@@ -45,7 +46,7 @@ currently has no application tables.
 
 Systemd supplies a private copy of `database.env` to the service through
 `LoadCredential`; the service can read it under `$CREDENTIALS_DIRECTORY`.
-The blank page does not query the database yet.
+The page does not query the database yet.
 
 Upgrade validates and retains saved credentials. If the credential file is
 missing, installation generates a new password for the local application

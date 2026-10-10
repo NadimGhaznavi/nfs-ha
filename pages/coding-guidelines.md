@@ -101,7 +101,7 @@ interfaces unless the owner explicitly authorizes a live operation.
 Installation targets `/opt/prod/disk-ha` through `DDISKHA.INSTALL_DIR`. The
 current installer deploys the Python package, readable CMDB metadata, and a
 bundled Web UI executable managed by `disk-ha-web.service`. The Web UI serves a
-blank page on port `23300` as the persistent `diskha` Linux account. Installation
+title bar and an empty content area on port `23300` as the persistent `diskha` Linux account. Installation
 provisions the local `diskha` MariaDB database and account, preserving credentials
 in `conf/database.env`. Disk workflows, application tables, and scheduling
 have not been implemented. See the
