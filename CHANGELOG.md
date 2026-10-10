@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This release is in memory of the last **Dodo** who died in 1681.
+
+### Added
+
+- Email Notification section showing the configured contact and an Email disk report
+  button for fresh, verbose SMART results from both disks.
+
+### Changed
+
+- Moved cron controls into a separate Health Check Schedule section.
+- Renamed the constants module and class to `DDiskHA` and updated release tooling.
+
 ## [0.4.2] - 2026-10-10 @ 19:00
 
 In memory of the **Cave Bear**, the last of which died out around 24,000 years ago.

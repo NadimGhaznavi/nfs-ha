@@ -36,7 +36,7 @@ is enabled daily at 14:00 server time (`0 14 * * *`), using the existing script'
 two stable disk paths and email sender and recipient. The existing
 `/root/.msmtprc` supplies credentials; installation does not create or copy it.
 Both command timeouts start at 30 seconds.
-Change **Enabled** and **Cron Schedule** in the Disk Health panel and click **Update**.
+Change **Enabled** and **Cron Schedule** in Health Check Schedule and click **Update**.
 The field reads the actual root cron entry on every page load. An absent entry
 shows disabled monitoring and an empty expression. Updates preserve unrelated jobs
 and update `health.json`; a cron write failure restores the previous settings.
@@ -70,6 +70,12 @@ Cron appends reports, skipped-run messages, and command failures to
 A configuration or persistence failure exits with status 1 and leaves the last
 completed result in place; check its timestamp and the log.
 Mail credentials stay in the external msmtp file and are not logged.
+**Email disk report** uses the configured mail recipient and runs `smartctl -x`
+on both disks. It emails one report with full SMART output even when both disks
+pass. The command is `disk-ha-check --email-report`, run as root. This request
+works with scheduling disabled and waits on the shared health-check lock.
+Delivery errors are saved with the latest health result; detailed reports and
+command failures are written to `data/health.log`.
 Upgrade and removal preserve configuration, results, and logs. Removal deletes
-the named cron entry, manual-check service, sudo permissions, and checker and
+the named cron entry, manual-check and email-report services, sudo permissions, and checker and
 schedule-helper executables.

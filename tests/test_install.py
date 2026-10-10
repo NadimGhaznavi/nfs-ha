@@ -42,13 +42,14 @@ class InstallationTests(unittest.TestCase):
                                         return_value=value)
             provisioning.start()
             self.addCleanup(provisioning.stop)
-        service = patch.object(installer.DDISKHA, "WEB_SERVICE_FILE",
+        service = patch.object(installer.DDiskHA, "WEB_SERVICE_FILE",
                                str(Path(temporary.name) / "disk-ha-web.service"))
         service.start()
         self.addCleanup(service.stop)
         for name, filename in (("HEALTH_SERVICE_FILE", "disk-ha-health.service"),
+                               ("EMAIL_REPORT_SERVICE_FILE", "disk-ha-email-report.service"),
                                ("HEALTH_SUDOERS_FILE", "disk-ha-health")):
-            setting = patch.object(installer.DDISKHA, name, str(Path(temporary.name) / filename))
+            setting = patch.object(installer.DDiskHA, name, str(Path(temporary.name) / filename))
             setting.start()
             self.addCleanup(setting.stop)
         original_run = subprocess.run
@@ -57,7 +58,7 @@ class InstallationTests(unittest.TestCase):
         self.addCleanup(validation.stop)
 
         def run_command(arguments, **kwargs):
-            if arguments[0] == installer.DDISKHA.VISUDO:
+            if arguments[0] == installer.DDiskHA.VISUDO:
                 return SimpleNamespace(returncode=0)
             return original_run(arguments, **kwargs)
 
@@ -69,7 +70,7 @@ class InstallationTests(unittest.TestCase):
         readiness = patch.object(installer, "restart")
         self.restart = readiness.start()
         self.addCleanup(readiness.stop)
-        metadata = patch.object(installer.DDISKHA, "INSTALL_DIR", str(self.target))
+        metadata = patch.object(installer.DDiskHA, "INSTALL_DIR", str(self.target))
         metadata.start()
         self.addCleanup(metadata.stop)
         output = redirect_stdout(io.StringIO())
@@ -78,8 +79,8 @@ class InstallationTests(unittest.TestCase):
 
     def test_install_upgrade_and_uninstall_preserve_local_files(self):
         installer.install()
-        constants = self.target / "disk_ha/constants/DDISKHA.py"
-        expected = (ROOT / "disk_ha/constants/DDISKHA.py").read_bytes()
+        constants = self.target / "disk_ha/constants/DDiskHA.py"
+        expected = (ROOT / "disk_ha/constants/DDiskHA.py").read_bytes()
         self.assertEqual(constants.read_bytes(), expected)
         for directory in (self.target, self.target / "bin", constants.parent.parent, constants.parent):
             self.assertEqual(directory.stat().st_mode & 0o777, 0o755)
@@ -89,19 +90,24 @@ class InstallationTests(unittest.TestCase):
         with zipfile.ZipFile(executable) as archive:
             self.assertEqual(archive.read("disk_ha/server/static/index.html"),
                              (ROOT / "disk_ha/server/static/index.html").read_bytes())
-        service = Path(installer.DDISKHA.WEB_SERVICE_FILE)
+        service = Path(installer.DDiskHA.WEB_SERVICE_FILE)
         self.assertEqual(service.stat().st_mode & 0o777, 0o644)
         self.assertIn(f"ExecStart={executable} --host 0.0.0.0 --port 23300", service.read_text())
         self.assertIn("User=diskha\nGroup=diskha", service.read_text())
-        self.assertIn(f"LoadCredential=database.env:{installer.DDISKHA.DATABASE_ENV}", service.read_text())
+        self.assertIn(f"LoadCredential=database.env:{installer.DDiskHA.DATABASE_ENV}", service.read_text())
         self.assertNotIn("LoadCredential=health.json", service.read_text())
-        health_service = Path(installer.DDISKHA.HEALTH_SERVICE_FILE)
-        sudoers = Path(installer.DDISKHA.HEALTH_SUDOERS_FILE)
+        health_service = Path(installer.DDiskHA.HEALTH_SERVICE_FILE)
+        sudoers = Path(installer.DDiskHA.HEALTH_SUDOERS_FILE)
         self.assertIn("User=root", health_service.read_text())
+        email_service = Path(installer.DDiskHA.EMAIL_REPORT_SERVICE_FILE)
+        self.assertIn("--email-report", email_service.read_text())
+        self.assertIn("User=root", email_service.read_text())
+        self.assertEqual(email_service.stat().st_mode & 0o777, 0o644)
         self.assertIn(f"ExecStart={self.target}/bin/disk-ha-check", health_service.read_text())
         self.assertEqual(sudoers.stat().st_mode & 0o777, 0o440)
         self.assertEqual(sudoers.read_text(),
                          "diskha ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block disk-ha-health.service\n"
+                         "diskha ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block disk-ha-email-report.service\n"
                          f'diskha ALL=(root) NOPASSWD: {self.target}/bin/disk-ha-schedule ""\n')
         self.control.assert_any_call("enable", service.name)
         self.restart.assert_called_once_with()
@@ -114,10 +120,10 @@ class InstallationTests(unittest.TestCase):
         self.assertEqual(checker.stat().st_mode & 0o777, 0o755)
         result = subprocess.run(
             ["/usr/bin/python3", "-B", "-c",
-             "from disk_ha.constants.DDISKHA import DDISKHA; print(DDISKHA.VERSION)"],
+             "from disk_ha.constants.DDiskHA import DDiskHA; print(DDiskHA.VERSION)"],
             cwd=self.target, text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), installer.DDISKHA.VERSION)
+        self.assertEqual(result.stdout.strip(), installer.DDiskHA.VERSION)
         preserved = {}
         for name in ("conf/settings.json", "conf/credentials.env", "data/state.json"):
             path = self.target / name
@@ -125,8 +131,11 @@ class InstallationTests(unittest.TestCase):
             path.chmod(0o600)
             preserved[path] = path.read_bytes()
         constants.write_text('VERSION = "old release"\n')
+        legacy_constants = constants.with_name("DDISKHA.py")
+        legacy_constants.write_text('class DDISKHA:\n    VERSION = "old release"\n')
         installer.install()
         self.assertEqual(constants.read_bytes(), expected)
+        self.assertFalse(legacy_constants.exists())
         installer.uninstall()
         installer.uninstall()
         self.assertFalse((self.target / "disk_ha").exists())
@@ -136,6 +145,7 @@ class InstallationTests(unittest.TestCase):
         self.scheduling.assert_any_call(self.target, None)
         self.assertFalse(service.exists())
         self.assertFalse(health_service.exists())
+        self.assertFalse(Path(installer.DDiskHA.EMAIL_REPORT_SERVICE_FILE).exists())
         self.assertFalse(sudoers.exists())
         self.control.assert_any_call("disable", "--now", service.name)
         for path, content in preserved.items():
@@ -144,7 +154,7 @@ class InstallationTests(unittest.TestCase):
 
     def test_staging_failure_keeps_installed_metadata(self):
         installer.install()
-        constants = self.target / "disk_ha/constants/DDISKHA.py"
+        constants = self.target / "disk_ha/constants/DDiskHA.py"
         original = constants.read_bytes()
         with patch.object(installer.shutil, "copytree", side_effect=OSError("Staging failed")):
             with self.assertRaisesRegex(OSError, "Staging failed"):
@@ -154,10 +164,10 @@ class InstallationTests(unittest.TestCase):
 
     def test_invalid_sudo_rule_keeps_previous_permission_and_cleans_candidate(self):
         installer.install()
-        rule = Path(installer.DDISKHA.HEALTH_SUDOERS_FILE)
+        rule = Path(installer.DDiskHA.HEALTH_SUDOERS_FILE)
         previous = rule.read_bytes()
         self.restart.reset_mock()
-        self.commands.side_effect = subprocess.CalledProcessError(1, [installer.DDISKHA.VISUDO])
+        self.commands.side_effect = subprocess.CalledProcessError(1, [installer.DDiskHA.VISUDO])
         with self.assertRaises(subprocess.CalledProcessError):
             installer.install()
         self.assertEqual(rule.read_bytes(), previous)

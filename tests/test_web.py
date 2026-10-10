@@ -56,7 +56,7 @@ class WebTests(unittest.TestCase):
     def test_readiness_and_unknown_paths(self):
         with self.opener.open(self.url + "/ready", timeout=2) as response:
             self.assertEqual(json.load(response), {"ready": True})
-        for path in ("/unknown", "/../constants/DDISKHA.py", "/conf/credentials.env"):
+        for path in ("/unknown", "/../constants/DDiskHA.py", "/conf/credentials.env"):
             with self.assertRaises(HTTPError) as raised:
                 self.opener.open(self.url + path, timeout=2)
             self.assertEqual(raised.exception.code, 404)
@@ -88,6 +88,32 @@ class WebTests(unittest.TestCase):
                                       headers={"Origin": self.url}), timeout=2)
         self.assertEqual(raised.exception.code, 503)
         self.assertIn(b"Cannot start check", raised.exception.read())
+        raised.exception.close()
+
+    @patch("disk_ha.server.__main__.request_email_report")
+    def test_email_report_requires_same_origin_post_and_reports_start_failure(self, email):
+        with self.opener.open(Request(self.url + "/health/email-report", data=b"",
+                                      headers={"Origin": self.url}), timeout=2) as response:
+            self.assertEqual(response.status, 202)
+            self.assertIn(b"report requested", response.read())
+        email.assert_called_once_with()
+        email.reset_mock()
+        for origin in (None, "http://other.example"):
+            headers = {} if origin is None else {"Origin": origin}
+            with self.assertRaises(HTTPError) as raised:
+                self.opener.open(Request(self.url + "/health/email-report", data=b"", headers=headers), timeout=2)
+            self.assertEqual(raised.exception.code, 403)
+            raised.exception.close()
+        email.assert_not_called()
+        with self.assertRaises(HTTPError) as raised:
+            self.opener.open(self.url + "/health/email-report", timeout=2)
+        self.assertEqual(raised.exception.code, 404)
+        raised.exception.close()
+        email.side_effect = OSError("permission denied")
+        with self.assertRaises(HTTPError) as raised:
+            self.opener.open(Request(self.url + "/health/email-report", data=b"",
+                                      headers={"Origin": self.url}), timeout=2)
+        self.assertEqual(raised.exception.code, 503)
         raised.exception.close()
 
     @patch("disk_ha.server.__main__.update_schedule",
@@ -122,10 +148,11 @@ class WebTests(unittest.TestCase):
     def test_packaged_server_serves_without_checkout(self):
         with tempfile.TemporaryDirectory(prefix="disk-ha-web-test-") as temporary:
             target = Path(temporary) / "prod"
-            with patch.object(installer.DDISKHA, "INSTALL_DIR", str(target)), \
-                    patch.object(installer.DDISKHA, "WEB_SERVICE_FILE", str(Path(temporary) / "service")), \
-                    patch.object(installer.DDISKHA, "HEALTH_SERVICE_FILE", str(Path(temporary) / "health.service")), \
-                    patch.object(installer.DDISKHA, "HEALTH_SUDOERS_FILE", str(Path(temporary) / "sudoers")), \
+            with patch.object(installer.DDiskHA, "INSTALL_DIR", str(target)), \
+                    patch.object(installer.DDiskHA, "WEB_SERVICE_FILE", str(Path(temporary) / "service")), \
+                    patch.object(installer.DDiskHA, "HEALTH_SERVICE_FILE", str(Path(temporary) / "health.service")), \
+                    patch.object(installer.DDiskHA, "EMAIL_REPORT_SERVICE_FILE", str(Path(temporary) / "email.service")), \
+                    patch.object(installer.DDiskHA, "HEALTH_SUDOERS_FILE", str(Path(temporary) / "sudoers")), \
                     patch.object(installer.subprocess, "run"), \
                     patch.object(installer.SystemAccount, "provision",
                                  return_value=SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid())), \

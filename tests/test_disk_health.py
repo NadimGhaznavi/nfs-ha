@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from disk_ha.activity.CheckDisks import CheckDisks
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.entity.Disk import Disk
 from disk_ha.entity.DiskHealth import DiskHealth
 from disk_ha.interface.EmailNotification import EmailNotification, NotificationError
@@ -86,6 +86,17 @@ class DiskHealthTests(unittest.TestCase):
 
 
 class SmartInspectionTests(unittest.TestCase):
+    def test_verbose_inspection_requests_extended_smart_data(self):
+        with patch("disk_ha.interface.SmartInspection.os.stat",
+                   return_value=SimpleNamespace(st_mode=stat.S_IFBLK)), \
+                patch("disk_ha.interface.SmartInspection.subprocess.run",
+                      return_value=SimpleNamespace(stdout=HEALTHY + "Device Model: Example\n", returncode=0)) as run:
+            health = SmartInspection(10).inspect_verbose(DISKS[0])
+        self.assertFalse(health.failed)
+        self.assertIn("Device Model", health.smart_output)
+        self.assertEqual(run.call_args.args[0], [DDiskHA.SMARTCTL, "-x", DISKS[0].device_path])
+        self.assertEqual(run.call_args.kwargs["timeout"], 10)
+
     def test_nonzero_smart_status_is_parsed_and_command_has_timeout(self):
         with patch("disk_ha.interface.SmartInspection.os.stat",
                    return_value=SimpleNamespace(st_mode=stat.S_IFBLK)), \
@@ -94,7 +105,7 @@ class SmartInspectionTests(unittest.TestCase):
             health = SmartInspection(10).inspect(DISKS[0])
         self.assertTrue(health.failed)
         self.assertEqual(health.smart_status, 8)
-        self.assertEqual(run.call_args.args[0], [DDISKHA.SMARTCTL, "-H", "-A", DISKS[0].device_path])
+        self.assertEqual(run.call_args.args[0], [DDiskHA.SMARTCTL, "-H", "-A", DISKS[0].device_path])
         self.assertEqual(run.call_args.kwargs["timeout"], 10)
         self.assertFalse(run.call_args.kwargs["check"])
 
@@ -133,7 +144,7 @@ class EmailNotificationTests(unittest.TestCase):
                    return_value=SimpleNamespace(returncode=0)) as run:
             self.notification.send(self.report, "host")
         self.assertEqual(run.call_args.args[0],
-                         [DDISKHA.MSMTP, "--file=/tmp/mail.conf", "--account=default", "-t"])
+                         [DDiskHA.MSMTP, "--file=/tmp/mail.conf", "--account=default", "-t"])
         self.assertEqual(run.call_args.kwargs["timeout"], 10)
         message = message_from_string(run.call_args.kwargs["input"])
         self.assertEqual(message["Subject"], "SMART disk alert on host")
@@ -148,6 +159,20 @@ class EmailNotificationTests(unittest.TestCase):
                     self.assertRaises(NotificationError) as caught:
                 self.notification.send(self.report, "host")
             self.assertNotIn("secret", str(caught.exception))
+
+    def test_requested_report_contains_raw_smart_output_for_both_healthy_disks(self):
+        report = CheckDisks(DISKS, "host", lambda disk: DiskHealth(disk, smart_output=f"Full data: {disk.device_path}\n"),
+                            Mock()).run()
+        with patch("disk_ha.interface.EmailNotification.subprocess.run",
+                   return_value=SimpleNamespace(returncode=0)) as command:
+            self.notification.send_report(report, "host")
+        message = message_from_string(command.call_args.kwargs["input"])
+        self.assertEqual(message["Subject"], "SMART disk report on host")
+        self.assertEqual(message["To"], "operator@example.com")
+        body = message.get_payload(decode=True).decode()
+        for disk in DISKS:
+            self.assertIn(f"Full data: {disk.device_path}", body)
+        self.assertIn("Overall result: PASS", body)
 
     def test_invalid_command_configuration_is_rejected(self):
         for timeout in (0, -1, float("inf"), float("nan")):

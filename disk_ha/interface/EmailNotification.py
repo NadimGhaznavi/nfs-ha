@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 import subprocess
 
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.entity.DiskCheckReport import DiskCheckReport
 
 
@@ -30,15 +30,21 @@ class EmailNotification:
         self.timeout = timeout
 
     def send(self, report: DiskCheckReport, hostname: str) -> None:
+        self._send(report.render(), f"SMART disk alert on {hostname}")
+
+    def send_report(self, report: DiskCheckReport, hostname: str) -> None:
+        self._send(report.render(verbose=True), f"SMART disk report on {hostname}")
+
+    def _send(self, body: str, subject: str) -> None:
         message = EmailMessage()
         message["To"] = self.recipient
         message["From"] = self.sender
-        message["Subject"] = f"SMART disk alert on {hostname}"
+        message["Subject"] = subject
         message["Date"] = formatdate(localtime=True)
-        message.set_content(report.render(), charset="utf-8")
+        message.set_content(body, charset="utf-8")
         try:
             result = subprocess.run(
-                [DDISKHA.MSMTP, f"--file={self.config_path}", "--account=default", "-t"],
+                [DDiskHA.MSMTP, f"--file={self.config_path}", "--account=default", "-t"],
                 input=message.as_string(), text=True, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL, timeout=self.timeout, check=False)
         except subprocess.TimeoutExpired:

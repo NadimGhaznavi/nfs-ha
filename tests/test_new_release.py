@@ -9,7 +9,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONSTANTS = "disk_ha/constants/DDISKHA.py"
+CONSTANTS = "disk_ha/constants/DDiskHA.py"
 
 
 class ReleaseTests(unittest.TestCase):
@@ -32,7 +32,7 @@ class ReleaseTests(unittest.TestCase):
             shutil.copy2(ROOT / name, destination)
         # Start every fixture before its first release, independently of this checkout's version.
         (self.repo / CONSTANTS).write_text(
-            'from typing import Final\n\nclass DDISKHA:\n    VERSION: Final[str] = "0.0.1"\n    CMDB_CODENAME: Final[str] = "Scaffolding"\n')
+            'from typing import Final\n\nclass DDiskHA:\n    VERSION: Final[str] = "0.0.1"\n    CMDB_CODENAME: Final[str] = "Scaffolding"\n')
         (self.repo / "CHANGELOG.md").write_text(
             '# Changelog\n\n## [Unreleased]\n\n### Summary\n\nFirst feature.\n')
         self.git("add", ".")

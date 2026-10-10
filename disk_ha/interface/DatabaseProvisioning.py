@@ -9,13 +9,13 @@ import secrets
 import subprocess
 import tempfile
 
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.interface.DatabaseEnvironment import DatabaseEnvironment
 
 
 class DatabaseProvisioning:
     def __init__(self, credentials: Path | None = None, admin_socket: str | None = None):
-        self.credentials = Path(DDISKHA.DATABASE_ENV) if credentials is None else Path(credentials)
+        self.credentials = Path(DDiskHA.DATABASE_ENV) if credentials is None else Path(credentials)
         self.admin_socket = admin_socket
 
     @staticmethod
@@ -28,15 +28,15 @@ class DatabaseProvisioning:
         environment = {key: value for key, value in os.environ.items()
                        if key not in {"MYSQL_PWD", "MYSQL_HOST", "MYSQL_TCP_PORT", "MYSQL_UNIX_PORT"}}
         try:
-            return subprocess.run([DDISKHA.MARIADB, *arguments], input=sql, text=True,
+            return subprocess.run([DDiskHA.MARIADB, *arguments], input=sql, text=True,
                                   capture_output=True, check=True, timeout=30, env=environment)
         except (OSError, subprocess.SubprocessError):
             # Client diagnostics may contain SQL or credentials; keep them out of output.
             raise ValueError(message) from None
 
     def _create_local(self):
-        database = DDISKHA.DATABASE_NAME
-        user = DDISKHA.DATABASE_USER
+        database = DDiskHA.DATABASE_NAME
+        user = DDiskHA.DATABASE_USER
         if not all(re.fullmatch(r"[A-Za-z0-9_]+", value) for value in (database, user)):
             raise ValueError("Local database and account names must contain letters, digits, or underscores.")
         if user == "root" or database in {"mysql", "sys", "information_schema", "performance_schema"}:
@@ -51,7 +51,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES ON `{data
 SELECT @@socket;
 """
         arguments = ["--no-defaults", "--user=root", "--protocol=socket", "--skip-ssl",
-                     f"--connect-timeout={DDISKHA.DATABASE_CONNECT_TIMEOUT}",
+                     f"--connect-timeout={DDiskHA.DATABASE_CONNECT_TIMEOUT}",
                      "--batch", "--skip-column-names"]
         if self.admin_socket:
             arguments.append("--socket=" + self.admin_socket)
@@ -81,7 +81,7 @@ SELECT @@socket;
             output.flush()
             arguments = ["--defaults-file=" + output.name,
                          "--protocol=" + ("socket" if "DB_SOCKET" in values else "tcp"),
-                         f"--connect-timeout={DDISKHA.DATABASE_CONNECT_TIMEOUT}", "--batch"]
+                         f"--connect-timeout={DDiskHA.DATABASE_CONNECT_TIMEOUT}", "--batch"]
             if "DB_SOCKET" in values:
                 arguments.append("--skip-ssl")
             self._run(arguments, "SELECT 1;",

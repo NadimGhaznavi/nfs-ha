@@ -17,7 +17,7 @@ import zipapp
 REPOSITORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY))
 
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.interface.DatabaseProvisioning import DatabaseProvisioning
 from disk_ha.interface.SystemAccount import SystemAccount
 from disk_ha.interface.HealthConfiguration import HealthConfiguration
@@ -25,13 +25,13 @@ from disk_ha.interface.HealthSchedule import HealthSchedule
 
 
 def systemctl(*arguments: str) -> None:
-    subprocess.run([DDISKHA.SYSTEMCTL, *arguments], check=True, timeout=30)
+    subprocess.run([DDiskHA.SYSTEMCTL, *arguments], check=True, timeout=30)
 
 
 def restart() -> None:
-    service = Path(DDISKHA.WEB_SERVICE_FILE).name
+    service = Path(DDiskHA.WEB_SERVICE_FILE).name
     systemctl("restart", service)
-    url = f"http://127.0.0.1:{DDISKHA.WEB_PORT}{DDISKHA.WEB_READY_PATH}"
+    url = f"http://127.0.0.1:{DDiskHA.WEB_PORT}{DDiskHA.WEB_READY_PATH}"
     opener = build_opener(ProxyHandler({}))
     deadline = time.monotonic() + 10
     while True:
@@ -52,20 +52,20 @@ def restart() -> None:
             raise ValueError(f"Web UI readiness returned HTTP {status}; check journalctl -u {service}.") from None
         except (URLError, TimeoutError):
             if time.monotonic() >= deadline:
-                raise ValueError(f"Web UI did not respond on port {DDISKHA.WEB_PORT}; "
+                raise ValueError(f"Web UI did not respond on port {DDiskHA.WEB_PORT}; "
                                  f"check journalctl -u {service}.") from None
         time.sleep(0.1)
-    print(f"disk-ha Web UI: active on port {DDISKHA.WEB_PORT} (listening on {DDISKHA.WEB_HOST})")
+    print(f"disk-ha Web UI: active on port {DDiskHA.WEB_PORT} (listening on {DDiskHA.WEB_HOST})")
 
 
 def install() -> None:
-    for executable in ("/usr/bin/python3", DDISKHA.SYSTEMCTL, DDISKHA.MARIADB,
-                       DDISKHA.USERADD, DDISKHA.GROUPADD, DDISKHA.NOLOGIN, DDISKHA.CRONTAB,
-                       DDISKHA.SUDO, DDISKHA.VISUDO):
+    for executable in ("/usr/bin/python3", DDiskHA.SYSTEMCTL, DDiskHA.MARIADB,
+                       DDiskHA.USERADD, DDiskHA.GROUPADD, DDiskHA.NOLOGIN, DDiskHA.CRONTAB,
+                       DDiskHA.SUDO, DDiskHA.VISUDO):
         if not os.access(executable, os.X_OK):
             raise ValueError(f"Required executable is missing: {executable}")
     account = SystemAccount.provision()
-    root = Path(DDISKHA.INSTALL_DIR)
+    root = Path(DDiskHA.INSTALL_DIR)
     upgrading = (root / "bin/disk-ha-check").exists()
     root.mkdir(parents=True, exist_ok=True)
     root.chmod(0o755)
@@ -83,7 +83,7 @@ def install() -> None:
     configuration.chmod(0o600)
     health = HealthConfiguration(configuration)
     if health.enabled:
-        for executable in (DDISKHA.SMARTCTL, DDISKHA.MSMTP, DDISKHA.CRONTAB):
+        for executable in (DDiskHA.SMARTCTL, DDiskHA.MSMTP, DDiskHA.CRONTAB):
             if not os.access(executable, os.X_OK):
                 raise ValueError(f"Required executable is missing: {executable}")
     log = root / "data/health.log"
@@ -130,35 +130,47 @@ def install() -> None:
             else:
                 source.chmod(0o644)
                 source.replace(destination)
-    service = Path(DDISKHA.WEB_SERVICE_FILE)
-    health_service = Path(DDISKHA.HEALTH_SERVICE_FILE)
+        # Remove the former metadata module after its replacement is deployed.
+        (package / "constants/DDISKHA.py").unlink(missing_ok=True)
+    service = Path(DDiskHA.WEB_SERVICE_FILE)
+    health_service = Path(DDiskHA.HEALTH_SERVICE_FILE)
     health_service.write_text(
         "[Unit]\nDescription=disk-ha manual health check\n\n"
         "[Service]\nType=oneshot\nUser=root\nGroup=root\nUMask=0077\nTimeoutStartSec=0\n"
         f"ExecStart={root}/bin/disk-ha-check --config {configuration} --result {root}/data/health.json\n"
         f"StandardOutput=append:{root}/data/health.log\nStandardError=append:{root}/data/health.log\n")
     health_service.chmod(0o644)
+    email_service = Path(DDiskHA.EMAIL_REPORT_SERVICE_FILE)
+    email_service.write_text(
+        "[Unit]\nDescription=disk-ha email verbose disk report\n\n"
+        "[Service]\nType=oneshot\nUser=root\nGroup=root\nUMask=0077\nTimeoutStartSec=0\n"
+        f"ExecStart={root}/bin/disk-ha-check --config {configuration} "
+        f"--result {root}/data/health.json --email-report\n"
+        f"StandardOutput=append:{root}/data/health.log\nStandardError=append:{root}/data/health.log\n")
+    email_service.chmod(0o644)
     # Grant exactly this start command, without access to other units or commands.
-    sudoers = Path(DDISKHA.HEALTH_SUDOERS_FILE)
+    sudoers = Path(DDiskHA.HEALTH_SUDOERS_FILE)
     with tempfile.NamedTemporaryFile(mode="w", prefix=".disk-ha-health-", dir=sudoers.parent,
                                      delete=False) as stream:
         staged_rule = Path(stream.name)
         stream.write(
-            f"{DDISKHA.SERVICE_USER} ALL=(root) NOPASSWD: {DDISKHA.SYSTEMCTL} "
+            f"{DDiskHA.SERVICE_USER} ALL=(root) NOPASSWD: {DDiskHA.SYSTEMCTL} "
             f"start --no-block {health_service.name}\n"
-            f'{DDISKHA.SERVICE_USER} ALL=(root) NOPASSWD: {root}/bin/disk-ha-schedule ""\n')
+            f"{DDiskHA.SERVICE_USER} ALL=(root) NOPASSWD: {DDiskHA.SYSTEMCTL} "
+            f"start --no-block {email_service.name}\n"
+            f'{DDiskHA.SERVICE_USER} ALL=(root) NOPASSWD: {root}/bin/disk-ha-schedule ""\n')
     try:
         staged_rule.chmod(0o440)
-        subprocess.run([DDISKHA.VISUDO, "-cf", str(staged_rule)],
+        subprocess.run([DDiskHA.VISUDO, "-cf", str(staged_rule)],
                        check=True, capture_output=True, timeout=10)
         staged_rule.replace(sudoers)
     finally:
         staged_rule.unlink(missing_ok=True)
     service.write_text(
         "[Unit]\nDescription=disk-ha Web UI\nAfter=network.target\n\n"
-        f"[Service]\nType=exec\nUser={DDISKHA.SERVICE_USER}\nGroup={DDISKHA.SERVICE_GROUP}\n"
-        f"LoadCredential=database.env:{DDISKHA.DATABASE_ENV}\n"
-        f"ExecStart={root}/bin/disk-ha-web --host {DDISKHA.WEB_HOST} --port {DDISKHA.WEB_PORT}\n"
+        f"[Service]\nType=exec\nUser={DDiskHA.SERVICE_USER}\nGroup={DDiskHA.SERVICE_GROUP}\n"
+        f"LoadCredential=database.env:{DDiskHA.DATABASE_ENV}\n"
+        f"ExecStart={root}/bin/disk-ha-web --host {DDiskHA.WEB_HOST} --port {DDiskHA.WEB_PORT}\n"
         "Restart=on-failure\nRestartSec=2\n\n[Install]\nWantedBy=multi-user.target\n")
     service.chmod(0o644)
     systemctl("daemon-reload")
@@ -175,23 +187,25 @@ def install() -> None:
     if health.enabled:
         systemctl("enable", "--now", "cron.service")
     restart()
-    print(f"Installed disk-ha {DDISKHA.VERSION} in {root}; configuration and data preserved.")
+    print(f"Installed disk-ha {DDiskHA.VERSION} in {root}; configuration and data preserved.")
 
 
 def uninstall() -> None:
-    root = Path(DDISKHA.INSTALL_DIR)
+    root = Path(DDiskHA.INSTALL_DIR)
     configuration = root / "conf/health.json"
     if configuration.parent.exists():
         with configuration.with_suffix(".lock").open("a") as stream:
             fcntl.flock(stream, fcntl.LOCK_EX)
             HealthSchedule.apply(root, None)
-    service = Path(DDISKHA.WEB_SERVICE_FILE)
-    health_service = Path(DDISKHA.HEALTH_SERVICE_FILE)
-    reload_required = service.exists() or health_service.exists()
-    if health_service.exists():
-        systemctl("stop", health_service.name)
-        health_service.unlink()
-    Path(DDISKHA.HEALTH_SUDOERS_FILE).unlink(missing_ok=True)
+    service = Path(DDiskHA.WEB_SERVICE_FILE)
+    health_service = Path(DDiskHA.HEALTH_SERVICE_FILE)
+    email_service = Path(DDiskHA.EMAIL_REPORT_SERVICE_FILE)
+    reload_required = service.exists() or health_service.exists() or email_service.exists()
+    for worker_service in (health_service, email_service):
+        if worker_service.exists():
+            systemctl("stop", worker_service.name)
+            worker_service.unlink()
+    Path(DDiskHA.HEALTH_SUDOERS_FILE).unlink(missing_ok=True)
     if service.exists():
         systemctl("disable", "--now", service.name)
         service.unlink()
@@ -200,7 +214,7 @@ def uninstall() -> None:
     (root / "bin/disk-ha-web").unlink(missing_ok=True)
     (root / "bin/disk-ha-check").unlink(missing_ok=True)
     (root / "bin/disk-ha-schedule").unlink(missing_ok=True)
-    package = Path(DDISKHA.INSTALL_DIR) / "disk_ha"
+    package = Path(DDiskHA.INSTALL_DIR) / "disk_ha"
     if package.exists():
         shutil.rmtree(package)
     print("Removed disk-ha's Web UI service, executable, Python package, and CMDB metadata; "

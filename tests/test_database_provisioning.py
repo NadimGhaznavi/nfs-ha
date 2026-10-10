@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.interface.DatabaseEnvironment import DatabaseEnvironment
 from disk_ha.interface.DatabaseProvisioning import DatabaseProvisioning
 
@@ -148,8 +148,8 @@ class ProvisioningTests(unittest.TestCase):
         for database, user in (("diskha`; DROP DATABASE other", "diskha"),
                                ("diskha", "root"), ("mysql", "diskha")):
             with self.subTest(database=database, user=user), \
-                    patch.object(DDISKHA, "DATABASE_NAME", database), \
-                    patch.object(DDISKHA, "DATABASE_USER", user), self.assertRaises(ValueError):
+                    patch.object(DDiskHA, "DATABASE_NAME", database), \
+                    patch.object(DDiskHA, "DATABASE_USER", user), self.assertRaises(ValueError):
                 self.provisioner.provision()
         self.run.assert_not_called()
 

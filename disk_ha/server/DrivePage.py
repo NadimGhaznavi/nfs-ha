@@ -6,10 +6,10 @@ from html import escape
 from pathlib import Path
 import subprocess
 
-from disk_ha.constants.DDISKHA import DDISKHA
+from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.interface.HealthResult import HealthResult
 from disk_ha.interface.DriveUsage import read_usage
-from disk_ha.interface.HealthControl import read_schedule
+from disk_ha.interface.HealthControl import read_schedule, read_contact
 
 
 def render_page() -> bytes:
@@ -28,31 +28,49 @@ def render_page() -> bytes:
         page = page.replace(f"{{{{disk{number}_capacity}}}}", capacity)
         page = page.replace(f"{{{{disk{number}_usage}}}}", used)
     page = page.replace("{{health}}", render_health())
-    page = page.replace("{{schedule}}", render_schedule())
+    schedule, run_control = render_schedule()
+    page = page.replace("{{schedule}}", schedule)
+    page = page.replace("{{run_control}}", run_control)
+    page = page.replace("{{email_notification}}", render_email_notification())
     return page.encode("utf-8")
 
 
-def render_schedule() -> str:
+def render_email_notification() -> str:
+    try:
+        recipient = read_contact()
+    except (OSError, ValueError, subprocess.SubprocessError):
+        contact = "Unavailable"
+        disabled = " disabled"
+    else:
+        contact = escape(recipient) if recipient is not None else "Not configured"
+        disabled = " disabled" if recipient is None else ""
+    return (f'<p>Contact: {contact}</p>'
+            f'<button id="email-report" type="button"{disabled}>Email disk report</button>'
+            '<p id="email-status" role="status" aria-live="polite"></p>')
+
+
+def render_schedule() -> tuple[str, str]:
+    """Render the schedule form and manual-run controls from one cron reading."""
     try:
         settings = read_schedule()
     except (OSError, ValueError, subprocess.SubprocessError):
-        return '<p>Cron schedule unavailable.</p><button disabled>Run Now</button>'
+        return '<p>Cron schedule unavailable.</p>', '<button disabled>Run Now</button>'
     expression = escape(settings["expression"], quote=True)
     checked = " checked" if settings["enabled"] else ""
     disabled = "" if settings["enabled"] else " disabled"
-    return ('<form id="schedule-form"><p>Schedule runs in server time.</p>'
+    return ('<form id="schedule-form">'
             f'<label><input id="schedule-enabled" type="checkbox"{checked}> Enabled</label> '
             '<label for="schedule-expression">Cron Schedule</label> '
             f'<input id="schedule-expression" type="text" size="20" maxlength="255" value="{expression}"> '
             '<button id="update-schedule" type="submit">Update</button></form>'
-            '<p id="schedule-status" role="status" aria-live="polite"></p>'
+            '<p id="schedule-status" role="status" aria-live="polite"></p>',
             f'<button id="run-now" type="button"{disabled}>Run Now</button>'
             '<p id="run-status" role="status" aria-live="polite"></p>')
 
 
 def render_health() -> str:
     try:
-        result = HealthResult(Path(DDISKHA.HEALTH_RESULT)).read()
+        result = HealthResult(Path(DDiskHA.HEALTH_RESULT)).read()
     except (OSError, ValueError):
         return "<p>Health results unavailable.</p>"
     if result is None:
