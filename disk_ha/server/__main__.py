@@ -2,14 +2,9 @@
 
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from importlib.resources import files
 
 from disk_ha.constants.DDISKHA import DDISKHA
-
-
-ASSETS = {
-    "/": (files("disk_ha.server") / "static/index.html", "text/html; charset=utf-8"),
-}
+from disk_ha.server.DrivePage import render_page
 
 
 class WebHandler(BaseHTTPRequestHandler):
@@ -25,15 +20,12 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def serve(self) -> None:
         path = self.path.split("?", 1)[0]
-        asset = ASSETS.get(path)
         if path == DDISKHA.WEB_READY_PATH:
             status, body, content_type = 200, b'{"ready": true}\n', "application/json; charset=utf-8"
-        elif asset is None:
-            status, body, content_type = 404, b"Not found.\n", "text/plain; charset=utf-8"
+        elif path == "/":
+            status, body, content_type = 200, render_page(), "text/html; charset=utf-8"
         else:
-            resource, content_type = asset
-            body = resource.read_bytes()
-            status = 200
+            status, body, content_type = 404, b"Not found.\n", "text/plain; charset=utf-8"
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))

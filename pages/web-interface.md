@@ -7,7 +7,12 @@ layout: single
 [Documentation index]({{ site.baseurl }}{% link index.md %})
 
 The web interface at `http://<server>:23300/` displays a dark teal title bar
-with the caption “Vigilent since October 2026” and an empty content area.
+with the caption “Vigilent since October 2026” and a Drive Configuration table.
+Disk 1 is the source at `/exports/disk1`; Disk 2 is the destination at
+`/exports/disk2`. Capacity and used space are shown in decimal TB
+(1 TB = 1,000,000,000,000 bytes), rounded to two decimal places.
+Reload the page to refresh the readings. Missing mounts display “Not mounted”;
+failed usage readings display “Unavailable”.
 It listens on all IPv4 interfaces and requires no third-party Python packages.
 
 ## Install and manage
@@ -25,7 +30,8 @@ sudo scripts/restart.sh
 Installation bundles the server and its page into `/opt/prod/disk-ha/bin/disk-ha-web`,
 deploys the Python package and readable CMDB metadata, and enables
 `disk-ha-web.service` at boot. The service runs under the persistent `diskha` account;
-serving this page requires no root privileges or disk access.
+serving this page requires no root privileges. The account needs directory
+access to both mount points to read filesystem usage; it does not read file contents.
 
 ## Accounts and database
 

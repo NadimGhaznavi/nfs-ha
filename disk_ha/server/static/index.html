@@ -21,8 +21,22 @@
     .masthead h1 { margin: 0; font-size: 1.3rem; font-weight: 700; }
     .masthead a { color: #83d5c5; text-decoration: none; }
     .masthead p { margin: .35rem 0 0; font-size: .85rem; color: #adc5c4; }
+    main { padding: 1.5rem 2rem; }
+    .panel { border: 1px solid #345155; border-radius: .4rem; padding: 1rem 1.5rem; }
+    h2 { font-size: 1.15rem; margin: 0 0 1rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: .8rem; border-bottom: 1px solid #345155; }
+    thead th { background: #1a2a2e; }
+    tbody th { font-weight: 400; }
+    td { font-variant-numeric: tabular-nums; }
+    th:not(:first-child), td { text-align: right; }
+    tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #1a2a2e; }
     :focus-visible { outline: 2px solid #83d5c5; outline-offset: 3px; }
-    @media (max-width: 600px) { .masthead { padding: 1rem; } }
+    @media (max-width: 600px) {
+      .masthead, main, .panel { padding: 1rem; }
+      th, td { padding: .6rem .4rem; }
+    }
   </style>
 </head>
 <body>
@@ -30,6 +44,17 @@
     <h1><a href="/">disk-ha</a></h1>
     <p>Vigilent since <time datetime="2026-10">October 2026</time></p>
   </header>
-  <main></main>
+  <main>
+    <section class="panel" aria-labelledby="drive-heading">
+      <h2 id="drive-heading">Drive Configuration</h2>
+      <table>
+        <thead><tr><th scope="col">Device</th><th scope="col">Capacity (TB)</th><th scope="col">Usage (TB)</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Disk 1</th><td>{{disk1_capacity}}</td><td>{{disk1_usage}}</td></tr>
+          <tr><th scope="row">Disk 2</th><td>{{disk2_capacity}}</td><td>{{disk2_usage}}</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
 </body>
 </html>

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The **Zofia** release is dedicated to [Zofia Szmydt](https://en.wikipedia.org/wiki/Zofia_Szmydt).
+
+### Added
+
+- Drive Configuration table showing capacity and used space in TB for Disk 1
+  and Disk 2, with explicit states for unmounted or unreadable drives.
+
 ## [0.3.2] - 2026-10-10 @ 17:03
 
 ### Added
