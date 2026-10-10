@@ -1,6 +1,7 @@
 """Render the two-drive configuration table."""
 
 from importlib.resources import files
+from datetime import datetime
 from html import escape
 from pathlib import Path
 
@@ -59,7 +60,10 @@ def render_health() -> str:
                     f'<td>{escape(problems)}</td></tr>')
     notification = ("<p>Email alert delivery failed: " + escape(result["notification_error"]) + "</p>"
                     if result["notification_error"] is not None else "")
-    return (f'<p>Last check: <time>{escape(result["checked_at"])}</time></p>'
+    checked_at = datetime.fromisoformat(result["checked_at"]).astimezone()
+    timestamp = checked_at.isoformat(timespec="seconds")
+    display_time = checked_at.strftime("%Y-%m-%d %H:%M:%S")
+    return (f'<p>Last check: <time datetime="{timestamp}">{display_time}</time> (server time)</p>'
             '<table><thead><tr><th scope="col">Device</th><th scope="col">Health</th>'
             '<th scope="col">Identity</th><th scope="col">Details</th></tr></thead>'
             '<tbody>' + "".join(rows) + '</tbody></table>' + notification)

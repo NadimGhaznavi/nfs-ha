@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Last health-check times are recorded and displayed in server local time with
+  second precision.
+
 ## [0.4.1] - 2026-10-10 @ 18:45
 
 In memory of the **Barbary Lions**, who died out in the 20th century.

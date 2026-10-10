@@ -1,12 +1,15 @@
 """Verify cron ownership, persisted results, permissions, and Web UI consumption."""
 
 from contextlib import redirect_stdout
+from datetime import datetime
 import fcntl
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -53,15 +56,38 @@ class HealthWorkerTests(unittest.TestCase):
         self.assertEqual([disk["disk"]["device_path"] for disk in result["disks"]], self.values["disks"])
         self.assertEqual(self.result.stat().st_mode & 0o777, 0o640)
         self.assertEqual(self.result.stat().st_gid, self.root.stat().st_gid)
-        self.assertIn("+00:00", result["checked_at"])
+        checked_at = datetime.fromisoformat(result["checked_at"])
+        self.assertIsNotNone(checked_at.tzinfo)
+        self.assertEqual(checked_at.microsecond, 0)
         with patch("disk_ha.server.DrivePage.DDISKHA.HEALTH_RESULT", str(self.result)), \
                 patch("disk_ha.server.DrivePage.read_usage", return_value=None):
             page = render_page().decode()
         self.assertIn("Disk Health", page)
-        self.assertIn(result["checked_at"], page)
+        self.assertIn(checked_at.astimezone().strftime("%Y-%m-%d %H:%M:%S"), page)
         self.assertIn("ata-primary", page)
         self.assertEqual(page.count("<td>PASS</td>"), 2)
         self.assertNotIn("{{health}}", page)
+
+    def test_old_utc_results_display_in_local_time_without_fractional_seconds(self):
+        self.worker(lambda disk: DiskHealth(disk))
+        result = HealthResult(self.result).read()
+        try:
+            with patch.dict(os.environ, {"TZ": "America/Toronto"}), \
+                    patch("disk_ha.server.DrivePage.DDISKHA.HEALTH_RESULT", str(self.result)):
+                time.tzset()
+                for timestamp, local in (("2026-01-02T02:03:04.123456+00:00", "2026-01-01 21:03:04"),
+                                         ("2026-07-02T02:03:04.123456+00:00", "2026-07-01 22:03:04")):
+                    result["checked_at"] = timestamp
+                    self.result.write_text(json.dumps(result))
+                    page = render_page().decode()
+                    self.assertIn(f'>{local}</time> (server time)', page)
+                    self.assertNotIn(".123456", page)
+                self.worker(lambda disk: DiskHealth(disk))
+                recorded = datetime.fromisoformat(HealthResult(self.result).read()["checked_at"])
+                self.assertEqual(recorded.utcoffset(), recorded.astimezone().utcoffset())
+                self.assertEqual(recorded.microsecond, 0)
+        finally:
+            time.tzset()
 
     def test_disk_failure_and_email_failure_are_persisted_and_html_escaped(self):
         status, email = self.worker(lambda disk: DiskHealth(disk, ("<failed & degraded>",)),

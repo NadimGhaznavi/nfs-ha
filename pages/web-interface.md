@@ -14,7 +14,8 @@ Disk 1 is the source at `/exports/disk1`; Disk 2 is the destination at
 Reload the page to refresh the readings. Missing mounts display “Not mounted”;
 failed usage readings display “Unavailable”.
 The Disk Health panel reads the latest saved check results and displays their
-UTC timestamp, each disk's status and details, and email delivery failures.
+timestamp in server local time (`YYYY-MM-DD HH:MM:SS`), each disk's status and
+details, and email delivery failures.
 No recorded result and unreadable or corrupt results have explicit messages.
 The panel shows the configured cron expression in server time and whether monitoring
 is enabled. Click **Run Now** to request a background health check, then reload

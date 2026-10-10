@@ -49,11 +49,12 @@ credential file. The worker rechecks `enabled` and skips overlapping runs using
 a file lock. Set `enabled` to `false` and run the upgrade script to remove the job.
 
 The latest completed check replaces `/opt/prod/disk-ha/data/health.json`
-atomically. It stores a UTC timestamp, both disks' SMART results and raw output,
+atomically. It stores a server-local timestamp with a timezone offset and
+second precision, both disks' SMART results and raw output,
 and any notification failure. The result belongs to root and the `diskha` group
 with mode `0640`; `data/` is root-owned with mode `0750`, so the Web UI can read
 results without changing them. The Web UI reads this file on each page request
-and shows the last recorded result and timestamp, along with the configured cron
+and shows the last recorded result and local timestamp (`YYYY-MM-DD HH:MM:SS`), along with the configured cron
 expression. **Run Now** requests the root-owned `disk-ha-health.service` in the
 background; reload the page after the check completes. The service uses the same
 configuration, result file, overlap lock, and log as cron. Disabled monitoring
