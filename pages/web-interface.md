@@ -13,12 +13,18 @@ Disk 1 is the source at `/exports/disk1`; Disk 2 is the destination at
 (1 TB = 1,000,000,000,000 bytes), rounded to two decimal places.
 Reload the page to refresh the readings. Missing mounts display “Not mounted”;
 failed usage readings display “Unavailable”.
+The Disk Health panel reads the latest saved check results and displays their
+UTC timestamp, each disk's status and details, and email delivery failures.
+No recorded result and unreadable or corrupt results have explicit messages.
+See [disk health]({{ site.baseurl }}{% link pages/disk-health.md %}) for scheduling.
 It listens on all IPv4 interfaces and requires no third-party Python packages.
 
 ## Install and manage
 
 On a Linux host with Python 3.10 or newer, systemd with `LoadCredential` support,
-and a running local MariaDB server with the `mariadb` client, run from the checkout.
+cron with the `crontab` command, and a running local MariaDB server with the
+`mariadb` client, run from the checkout. Enabled monitoring also needs `smartctl`
+and `msmtp` with a configured credential file.
 Root must be able to connect to MariaDB through Unix socket authentication.
 
 ```sh
@@ -37,7 +43,9 @@ access to both mount points to read filesystem usage; it does not read file cont
 
 Installation creates the `diskha` Linux system account and group with a non-login
 shell and no separate home directory. Application code stays root-owned;
-`/opt/prod/disk-ha/data/` belongs to `diskha` with mode `0700`.
+`/opt/prod/disk-ha/data/` belongs to root and the `diskha` group with mode `0750`.
+Root runs scheduled health checks and writes results with mode `0640`;
+the Web UI account has read access.
 
 Following the BMDynIP provisioning pattern, installation creates:
 

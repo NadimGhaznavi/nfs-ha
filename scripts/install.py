@@ -1,6 +1,7 @@
 """Install, restart, or remove disk-ha's Web UI; preserve configuration and data."""
 
 import argparse
+import fcntl
 import os
 from pathlib import Path
 import shutil
@@ -18,6 +19,8 @@ sys.path.insert(0, str(REPOSITORY))
 from disk_ha.constants.DDISKHA import DDISKHA
 from disk_ha.interface.DatabaseProvisioning import DatabaseProvisioning
 from disk_ha.interface.SystemAccount import SystemAccount
+from disk_ha.interface.HealthConfiguration import HealthConfiguration
+from disk_ha.interface.HealthSchedule import HealthSchedule
 
 
 def systemctl(*arguments: str) -> None:
@@ -56,7 +59,7 @@ def restart() -> None:
 
 def install() -> None:
     for executable in ("/usr/bin/python3", DDISKHA.SYSTEMCTL, DDISKHA.MARIADB,
-                       DDISKHA.USERADD, DDISKHA.GROUPADD, DDISKHA.NOLOGIN):
+                       DDISKHA.USERADD, DDISKHA.GROUPADD, DDISKHA.NOLOGIN, DDISKHA.CRONTAB):
         if not os.access(executable, os.X_OK):
             raise ValueError(f"Required executable is missing: {executable}")
     account = SystemAccount.provision()
@@ -67,7 +70,25 @@ def install() -> None:
         directory = root / name
         directory.mkdir(exist_ok=True)
         directory.chmod(0o755 if name == "bin" else 0o700)
-    os.chown(root / "data", account.pw_uid, account.pw_gid)
+    # Root writes SMART results; the Web UI group may only read them.
+    os.chown(root / "data", os.geteuid(), account.pw_gid)
+    (root / "data").chmod(0o750)
+    configuration = root / "conf/health.json"
+    if not configuration.exists():
+        with configuration.open("x") as stream:
+            stream.write((REPOSITORY / "conf/health.json").read_text())
+    configuration.chmod(0o600)
+    health = HealthConfiguration(configuration)
+    if health.enabled:
+        for executable in (DDISKHA.SMARTCTL, DDISKHA.MSMTP, DDISKHA.CRONTAB):
+            if not os.access(executable, os.X_OK):
+                raise ValueError(f"Required executable is missing: {executable}")
+    log = root / "data/health.log"
+    if log.is_symlink() or (log.exists() and (not log.is_file() or log.stat().st_uid != os.geteuid())):
+        raise ValueError("Health log must be a regular file owned by root.")
+    log.touch(exist_ok=True)
+    os.chown(log, os.geteuid(), account.pw_gid)
+    log.chmod(0o640)
     DatabaseProvisioning().provision()
     # Stage the package before replacing installed files. Individual replacements
     # are atomic, including the constants file read by CMDB scanners.
@@ -83,6 +104,12 @@ def install() -> None:
         zipapp.create_archive(source_root, target=archive, interpreter="/usr/bin/python3")
         archive.chmod(0o755)
         archive.replace(root / "bin/disk-ha-web")
+        (source_root / "__main__.py").write_text(
+            "from disk_ha.health import main\nraise SystemExit(main())\n")
+        checker = staging / "disk-ha-check"
+        zipapp.create_archive(source_root, target=checker, interpreter="/usr/bin/python3")
+        checker.chmod(0o755)
+        checker.replace(root / "bin/disk-ha-check")
         package = root / "disk_ha"
         package.mkdir(exist_ok=True)
         package.chmod(0o755)
@@ -105,17 +132,28 @@ def install() -> None:
     systemctl("daemon-reload")
     systemctl("enable", service.name)
     restart()
+    with configuration.with_suffix(".lock").open("a") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        HealthSchedule.apply(root, HealthConfiguration(configuration))
+    if health.enabled:
+        systemctl("enable", "--now", "cron.service")
     print(f"Installed disk-ha {DDISKHA.VERSION} in {root}; configuration and data preserved.")
 
 
 def uninstall() -> None:
     root = Path(DDISKHA.INSTALL_DIR)
+    configuration = root / "conf/health.json"
+    if configuration.parent.exists():
+        with configuration.with_suffix(".lock").open("a") as stream:
+            fcntl.flock(stream, fcntl.LOCK_EX)
+            HealthSchedule.apply(root, None)
     service = Path(DDISKHA.WEB_SERVICE_FILE)
     if service.exists():
         systemctl("disable", "--now", service.name)
         service.unlink()
         systemctl("daemon-reload")
     (root / "bin/disk-ha-web").unlink(missing_ok=True)
+    (root / "bin/disk-ha-check").unlink(missing_ok=True)
     package = Path(DDISKHA.INSTALL_DIR) / "disk_ha"
     if package.exists():
         shutil.rmtree(package)

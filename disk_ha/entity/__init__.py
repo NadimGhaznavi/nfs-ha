@@ -1,0 +1,1 @@
+"""Disk monitoring domain entities."""

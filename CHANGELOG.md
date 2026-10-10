@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+In memory of the **Aurochs** that went extinct in 1627.
+
+### Added
+
+- Configurable cron health checks with atomic flat-file results, a Web UI health
+  panel, and preservation of settings and results across upgrades and removal.
+- Disk health entities, SMART and email interfaces, and a check activity modeling
+  the existing script, with bounded commands and explicit unavailable-result
+  and notification-failure reporting.
+
 ## [0.3.4] - 2026-10-10 @ 17:21
 
 The **Zofia** release is dedicated to [Zofia Szmydt](https://en.wikipedia.org/wiki/Zofia_Szmydt).

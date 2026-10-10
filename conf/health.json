@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "expression": "0 14 * * *",
+  "disks": [
+    "/dev/disk/by-id/ata-ST8000DM004-2U9188_ZR161KM0",
+    "/dev/disk/by-id/ata-ST8000DM004-2U9188_ZR161M2Z"
+  ],
+  "smart_timeout": 30,
+  "mail": {
+    "recipient": "nghaznavi@gmail.com",
+    "sender": "nghaznavi@gmail.com",
+    "config_path": "/root/.msmtprc",
+    "timeout": 30
+  }
+}
