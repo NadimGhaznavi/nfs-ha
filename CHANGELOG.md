@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-10 @ 20:14
+
 This release is in memory of the **Falkland Fox** who were wiped out by 1876.
 
 ### Added
