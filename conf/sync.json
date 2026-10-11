@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "expression": "0 */4 * * *",
+  "source": {
+    "mount": "/exports/disk1",
+    "uuid": "824971c7-d263-4b6a-a562-3452c3482ece"
+  },
+  "target": {
+    "mount": "/exports/disk2",
+    "uuid": "b14c1ec0-df91-4f3d-a990-b0c820b81a9c"
+  },
+  "timeout": 86400
+}
