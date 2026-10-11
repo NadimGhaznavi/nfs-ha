@@ -173,6 +173,13 @@ def install() -> None:
         f"--result {root}/data/health.json --email-report\n"
         f"StandardOutput=append:{root}/data/health.log\nStandardError=append:{root}/data/health.log\n")
     email_service.chmod(0o644)
+    sync_service = Path(DDiskHA.SYNC_SERVICE_FILE)
+    sync_service.write_text(
+        "[Unit]\nDescription=disk-ha manual data sync\n\n"
+        "[Service]\nType=oneshot\nUser=root\nGroup=root\nUMask=0077\nTimeoutStartSec=0\n"
+        f"ExecStart={root}/bin/disk-ha-sync --config {sync_configuration} --result {root}/data/sync-output.log\n"
+        f"StandardOutput=append:{root}/data/sync.log\nStandardError=append:{root}/data/sync.log\n")
+    sync_service.chmod(0o644)
     # Grant exactly this start command, without access to other units or commands.
     sudoers = Path(DDiskHA.HEALTH_SUDOERS_FILE)
     with tempfile.NamedTemporaryFile(mode="w", prefix=".disk-ha-health-", dir=sudoers.parent,
@@ -183,6 +190,8 @@ def install() -> None:
             f"start --no-block {health_service.name}\n"
             f"{DDiskHA.SERVICE_USER} ALL=(root) NOPASSWD: {DDiskHA.SYSTEMCTL} "
             f"start --no-block {email_service.name}\n"
+            f"{DDiskHA.SERVICE_USER} ALL=(root) NOPASSWD: {DDiskHA.SYSTEMCTL} "
+            f"start --no-block {sync_service.name}\n"
             f'{DDiskHA.SERVICE_USER} ALL=(root) NOPASSWD: {root}/bin/disk-ha-schedule ""\n')
     try:
         staged_rule.chmod(0o440)
@@ -237,8 +246,9 @@ def uninstall() -> None:
     service = Path(DDiskHA.WEB_SERVICE_FILE)
     health_service = Path(DDiskHA.HEALTH_SERVICE_FILE)
     email_service = Path(DDiskHA.EMAIL_REPORT_SERVICE_FILE)
-    reload_required = service.exists() or health_service.exists() or email_service.exists()
-    for worker_service in (health_service, email_service):
+    sync_service = Path(DDiskHA.SYNC_SERVICE_FILE)
+    reload_required = any(unit.exists() for unit in (service, health_service, email_service, sync_service))
+    for worker_service in (health_service, email_service, sync_service):
         if worker_service.exists():
             systemctl("stop", worker_service.name)
             worker_service.unlink()
