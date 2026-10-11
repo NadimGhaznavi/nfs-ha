@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This release is in memory of the **Elephant Bird**.
+
 ### Added
 
 - Data Sync Schedule with editable cron controls, an every-four-hours default,
