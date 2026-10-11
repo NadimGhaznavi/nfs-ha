@@ -1,5 +1,6 @@
 """Deliver health reports through msmtp without handling mail credentials."""
 
+from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formatdate
 import math
@@ -8,6 +9,7 @@ import subprocess
 
 from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.entity.DiskCheckReport import DiskCheckReport
+from disk_ha.presentation.SmartEmail import render
 
 
 class NotificationError(RuntimeError):
@@ -30,18 +32,26 @@ class EmailNotification:
         self.timeout = timeout
 
     def send(self, report: DiskCheckReport, hostname: str) -> None:
-        self._send(report.render(), f"SMART disk alert on {hostname}")
+        self._send(report, hostname, f"SMART disk alert on {hostname}", verbose=False)
 
     def send_report(self, report: DiskCheckReport, hostname: str) -> None:
-        self._send(report.render(verbose=True), f"SMART disk report on {hostname}")
+        self._send(report, hostname, f"SMART disk report on {hostname}", verbose=True)
 
-    def _send(self, body: str, subject: str) -> None:
+    def _send(self, report: DiskCheckReport, hostname: str, subject: str, verbose: bool) -> None:
+        try:
+            available = Path(self.config_path).is_file()
+        except OSError:
+            available = False
+        if not available:
+            raise NotificationError("Email configuration file is missing or inaccessible.")
         message = EmailMessage()
         message["To"] = self.recipient
         message["From"] = self.sender
         message["Subject"] = subject
         message["Date"] = formatdate(localtime=True)
-        message.set_content(body, charset="utf-8")
+        message.set_content(report.render(verbose=verbose), charset="utf-8")
+        message.add_alternative(render(report, hostname, datetime.now().astimezone(), verbose=verbose),
+                                subtype="html", charset="utf-8")
         try:
             result = subprocess.run(
                 [DDiskHA.MSMTP, f"--file={self.config_path}", "--account=default", "-t"],
