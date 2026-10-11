@@ -9,7 +9,10 @@ Data Sync Schedule mirrors the contents of `/exports/disk1/` to
 The initial cron schedule is `0 */4 * * *`: every four hours at the top of the
 hour, in server local time. Edit **Enabled** and **Cron Schedule**, then click
 **Update**. The form reads the actual root cron entry; disabling removes it.
-Health alerts do not disable synchronization.
+**Sync Now**, beside **Update**, requests a background run using the saved settings.
+Enable and update the schedule first if synchronization is disabled. Manual runs
+use the same mount checks, lock, timeout, and output as cron. Health alerts do not
+disable synchronization.
 
 ## Configuration and safeguards
 
@@ -50,4 +53,4 @@ that transcript. The output page displays filenames as text and streams large lo
 Cron appends skipped-run reasons, completion messages, and command failures to
 `data/sync.log`. A failed sync exits with status 1; inspect this log if no new
 transcript appears. Upgrade and removal preserve configuration and saved logs.
-Uninstall removes disk-ha's sync cron entry and executable.
+Uninstall removes disk-ha's sync cron entry, manual sync service, and executable.

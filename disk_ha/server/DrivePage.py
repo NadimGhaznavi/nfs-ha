@@ -43,12 +43,15 @@ def render_sync_schedule() -> str:
         return '<p>Cron schedule unavailable.</p>'
     expression = escape(settings["expression"], quote=True)
     checked = " checked" if settings["enabled"] else ""
+    disabled = "" if settings["enabled"] else " disabled"
     return ('<form id="sync-schedule-form">'
             f'<label><input id="sync-schedule-enabled" type="checkbox"{checked}> Enabled</label> '
             '<label for="sync-schedule-expression">Cron Schedule</label> '
             f'<input id="sync-schedule-expression" type="text" size="20" maxlength="255" value="{expression}"> '
-            '<button id="update-sync-schedule" type="submit">Update</button></form>'
-            '<p id="sync-schedule-status" role="status" aria-live="polite"></p>')
+            '<button id="update-sync-schedule" type="submit">Update</button>'
+            f'<button id="sync-now" type="button"{disabled}>Sync Now</button></form>'
+            '<p id="sync-schedule-status" role="status" aria-live="polite"></p>'
+            '<p id="sync-run-status" role="status" aria-live="polite"></p>')
 
 
 def render_email_notification() -> str:

@@ -114,11 +114,31 @@
         const settings = await response.json();
         document.getElementById('sync-schedule-enabled').checked = settings.enabled;
         document.getElementById('sync-schedule-expression').value = settings.expression;
+        syncEnabled = settings.enabled;
+        syncButton.disabled = !syncEnabled || syncRequested;
         status.textContent = 'Schedule updated.';
       } catch (error) {
         status.textContent = 'Update failed. Reload to check the installed schedule before retrying.';
       } finally {
         update.disabled = false;
+      }
+    });
+    const syncButton = document.getElementById('sync-now');
+    let syncEnabled = syncButton ? !syncButton.disabled : false;
+    let syncRequested = false;
+    if (syncButton) syncButton.addEventListener('click', async () => {
+      const status = document.getElementById('sync-run-status');
+      syncRequested = true;
+      syncButton.disabled = true;
+      status.textContent = 'Requesting data sync…';
+      try {
+        const response = await fetch('/sync/run', { method: 'POST' });
+        status.textContent = await response.text();
+      } catch (error) {
+        status.textContent = 'Request failed. Reload the page and try again.';
+      } finally {
+        syncRequested = false;
+        syncButton.disabled = !syncEnabled;
       }
     });
     const emailButton = document.getElementById('email-report');

@@ -62,3 +62,11 @@ def request_check() -> None:
     subprocess.run([DDiskHA.SUDO, "-n", DDiskHA.SYSTEMCTL, "start", "--no-block",
                     Path(DDiskHA.HEALTH_SERVICE_FILE).name],
                    capture_output=True, check=True, timeout=10)
+
+
+def request_sync() -> None:
+    if not read_sync_schedule()["enabled"]:
+        raise ValueError("Synchronization is disabled.")
+    subprocess.run([DDiskHA.SUDO, "-n", DDiskHA.SYSTEMCTL, "start", "--no-block",
+                    Path(DDiskHA.SYNC_SERVICE_FILE).name],
+                   capture_output=True, check=True, timeout=10)

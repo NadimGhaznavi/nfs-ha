@@ -39,3 +39,4 @@ class DDiskHA:
     FINDMNT: Final[str] = "/usr/bin/findmnt"
     SYNC_CONFIG: Final[str] = "/opt/prod/disk-ha/conf/sync.json"
     SYNC_RESULT: Final[str] = "/opt/prod/disk-ha/data/sync-output.log"
+    SYNC_SERVICE_FILE: Final[str] = "/etc/systemd/system/disk-ha-sync.service"
