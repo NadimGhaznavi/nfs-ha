@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0] - 2026-10-10 @ 20:43
 
+This release is to remember the **Glyptodon** who died out about 10,000 years ago. They lasted about 3.2 million years, well above the average run for a species.
+
 ### Added
 
 - Formatted HTML SMART emails with a table of contents, health summary, disk identity and attribute tables, full diagnostics, and a plain-text alternative.
