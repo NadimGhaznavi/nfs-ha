@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-10 @ 20:43
+
 ### Added
 
 - Formatted HTML SMART emails with a table of contents, health summary, disk identity and attribute tables, full diagnostics, and a plain-text alternative.
