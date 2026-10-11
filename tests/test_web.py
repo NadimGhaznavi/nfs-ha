@@ -62,6 +62,31 @@ class WebTests(unittest.TestCase):
             self.assertEqual(raised.exception.code, 404)
             raised.exception.close()
 
+    @patch("disk_ha.server.__main__.update_sync_schedule",
+           return_value={"enabled": True, "expression": "0 */4 * * *"})
+    def test_sync_schedule_update_and_output_page(self, update):
+        body = b'{"enabled":true,"expression":"0 */4 * * *"}'
+        request = Request(self.url + "/sync/schedule", data=body,
+                          headers={"Origin": self.url, "Content-Type": "application/json"})
+        with self.opener.open(request, timeout=2) as response:
+            self.assertEqual(json.load(response)["expression"], "0 */4 * * *")
+        update.assert_called_once_with(True, "0 */4 * * *")
+        update.reset_mock()
+        with self.assertRaises(HTTPError) as raised:
+            self.opener.open(Request(self.url + "/sync/schedule", data=body,
+                                    headers={"Origin": "http://other.example", "Content-Type": "application/json"}), timeout=2)
+        self.assertEqual(raised.exception.code, 403)
+        raised.exception.close()
+        update.assert_not_called()
+        with patch("disk_ha.server.__main__.render_sync_output", return_value=iter([b"<pre>output", b"</pre>"])):
+            with self.opener.open(self.url + "/sync/output", timeout=2) as response:
+                self.assertEqual(response.read(), b"<pre>output</pre>")
+                self.assertEqual(response.headers["Content-Type"], "text/html; charset=utf-8")
+                self.assertEqual(response.headers["Cache-Control"], "no-store")
+            with self.opener.open(Request(self.url + "/sync/output", method="HEAD"), timeout=2) as response:
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.read(), b"")
+
     @patch("disk_ha.server.__main__.request_check")
     def test_manual_check_accepts_only_same_origin_post(self, check):
         with self.opener.open(Request(self.url + "/health/run", data=b"",
@@ -158,6 +183,7 @@ class WebTests(unittest.TestCase):
                                  return_value=SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid())), \
                     patch.object(installer.DatabaseProvisioning, "provision"), \
                     patch.object(installer.HealthSchedule, "apply"), \
+                    patch.object(installer.SyncSchedule, "apply"), \
                     patch.object(installer.os, "access", return_value=True), \
                     patch.object(installer, "systemctl"), patch.object(installer, "restart"), \
                     redirect_stdout(io.StringIO()):

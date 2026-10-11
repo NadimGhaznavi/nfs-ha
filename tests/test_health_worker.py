@@ -222,7 +222,7 @@ class HealthWorkerTests(unittest.TestCase):
             installed.append(previous)
             return SimpleNamespace(returncode=0)
 
-        with patch("disk_ha.interface.HealthSchedule.subprocess.run", side_effect=crontab):
+        with patch("disk_ha.interface.CronSchedule.subprocess.run", side_effect=crontab):
             HealthSchedule.apply(self.root, HealthConfiguration(self.config))
             self.values["expression"] = "*/15 * * * *"
             self.save_config()
@@ -235,12 +235,12 @@ class HealthWorkerTests(unittest.TestCase):
         self.assertEqual(len(installed), 3)
 
     def test_absent_crontab_and_read_failure(self):
-        with patch("disk_ha.interface.HealthSchedule.subprocess.run",
+        with patch("disk_ha.interface.CronSchedule.subprocess.run",
                    side_effect=[SimpleNamespace(returncode=1, stdout="", stderr="no crontab for root"),
                                 SimpleNamespace(returncode=0)]) as command:
             HealthSchedule.apply(self.root, HealthConfiguration(self.config))
         self.assertEqual(command.call_count, 2)
-        with patch("disk_ha.interface.HealthSchedule.subprocess.run",
+        with patch("disk_ha.interface.CronSchedule.subprocess.run",
                    return_value=SimpleNamespace(returncode=1, stdout="", stderr="Permission denied")) as command:
             with self.assertRaises(OSError):
                 HealthSchedule.apply(self.root, HealthConfiguration(self.config))
@@ -249,7 +249,7 @@ class HealthWorkerTests(unittest.TestCase):
     def test_schedule_reads_cron_instead_of_saved_expression(self):
         tab = "MAILTO=other@example.com\n15 2 * * * /other # unrelated\n"
         tab += "*/20 6-18 * * 1-5 /checker # disk-ha-health-check\n"
-        with patch("disk_ha.interface.HealthSchedule.subprocess.run",
+        with patch("disk_ha.interface.CronSchedule.subprocess.run",
                    return_value=SimpleNamespace(returncode=0, stdout=tab, stderr="")):
             self.assertEqual(HealthSchedule.read(), {"enabled": True, "expression": "*/20 6-18 * * 1-5"})
         with patch.object(HealthSchedule, "_crontab", return_value=""):
@@ -273,7 +273,7 @@ class HealthWorkerTests(unittest.TestCase):
             tab = kwargs["input"]
             return SimpleNamespace(returncode=0)
 
-        with patch("disk_ha.interface.HealthSchedule.subprocess.run", side_effect=crontab):
+        with patch("disk_ha.interface.CronSchedule.subprocess.run", side_effect=crontab):
             self.assertEqual(HealthSchedule.update(self.root, True, "*/15 * * * *"),
                              {"enabled": True, "expression": "*/15 * * * *"})
             self.assertTrue(tab.startswith(unrelated))

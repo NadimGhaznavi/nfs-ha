@@ -115,7 +115,10 @@ root-owned verbose report service. Requested reports include both disks' full SM
 output, are emailed even for healthy disks, and wait on the shared worker lock.
 The owner selected daily checks at 14:00 server time and the existing script's
 email settings; deployment settings remain configurable and survive upgrades.
-Synchronization and application tables have not been implemented. See the
+Root-run synchronization defaults to every four hours (`0 */4 * * *`). Its worker
+verifies exact mount points and UUIDs, prevents overlapping runs, and publishes
+the latest verbose output for a separate Web UI page. Health alerts do not disable
+synchronization. Application tables have not been implemented. See the
 [web interface guide]({{ site.baseurl }}{% link pages/web-interface.md %})
 for account permissions and credential delivery.
 

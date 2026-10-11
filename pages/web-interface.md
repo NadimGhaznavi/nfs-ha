@@ -24,6 +24,12 @@ and click **Update** to remove the job. An absent job shows an empty schedule.
 Times use the server's timezone. In Disk Health, click **Run Now** to request a background health check, then reload
 to see its completed result. Checks retain their email alerts and overlap protection.
 The button is disabled when monitoring is disabled or settings are unavailable.
+Data Sync Schedule appears below Health Check Schedule with the same **Enabled**,
+**Cron Schedule**, and **Update** controls. It defaults to every four hours
+(`0 */4 * * *`) and reads its installed cron entry on each page load.
+**Most recent sync output** opens a separate page showing the latest rsync output,
+timestamps, and success or failure. See
+[data synchronization]({{ site.baseurl }}{% link pages/data-sync.md %}) for configuration.
 The final Email Notification section shows **Contact**, the configured alert recipient.
 Click **Email disk report** to request a fresh, verbose SMART report for both disks,
 including healthy disks. The request runs in the background, waits for an active
@@ -39,6 +45,7 @@ On a Linux host with Python 3.10 or newer, systemd with `LoadCredential` support
 cron with the `crontab` command, and a running local MariaDB server with the
 `mariadb` client, run from the checkout. Enabled monitoring also needs `smartctl`
 and `msmtp` with a configured credential file.
+Enabled synchronization also requires `rsync` and `findmnt`.
 Root must be able to connect to MariaDB through Unix socket authentication.
 Schedule controls and manual checks also require `sudo` and `visudo`.
 

@@ -13,6 +13,14 @@ from disk_ha.constants.DDiskHA import DDiskHA
 
 
 class ScheduleHelperTests(unittest.TestCase):
+    def test_sync_requests_use_only_the_fixed_sync_policy(self):
+        with patch.object(schedule.SyncSchedule, "read", return_value={"enabled": True, "expression": "0 */4 * * *"}):
+            self.assertEqual(schedule.dispatch({"action": "read-sync"})["expression"], "0 */4 * * *")
+        with patch.object(schedule.SyncSchedule, "update") as update, \
+                patch.object(schedule.subprocess, "run"), patch.object(schedule.HealthSchedule, "update") as health:
+            schedule.dispatch({"action": "update-sync", "enabled": True, "expression": "0 */4 * * *"})
+            update.assert_called_once_with(Path(DDiskHA.INSTALL_DIR), True, "0 */4 * * *")
+            health.assert_not_called()
     def test_contact_returns_only_configured_recipient(self):
         with patch.object(schedule, "HealthConfiguration", return_value=SimpleNamespace(
                 notification=SimpleNamespace(recipient="operator@example.com"))):

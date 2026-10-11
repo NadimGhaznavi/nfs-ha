@@ -7,7 +7,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.server.DrivePage import render_page
-from disk_ha.interface.HealthControl import request_check, request_email_report, update_schedule
+from disk_ha.interface.HealthControl import request_check, request_email_report, update_schedule, update_sync_schedule
+from disk_ha.server.SyncPage import render_sync_output
 
 
 class WebHandler(BaseHTTPRequestHandler):
@@ -22,7 +23,7 @@ class WebHandler(BaseHTTPRequestHandler):
         self.serve()
 
     def do_POST(self) -> None:
-        if self.path not in ("/health/run", "/health/schedule", "/health/email-report"):
+        if self.path not in ("/health/run", "/health/schedule", "/health/email-report", "/sync/schedule"):
             self.respond(404, b"Not found.\n", "text/plain; charset=utf-8")
             return
         # Browser requests must come from this page, including on private networks.
@@ -31,7 +32,7 @@ class WebHandler(BaseHTTPRequestHandler):
                 or self.headers.get("Transfer-Encoding")):
             self.respond(403, b"Request must come from this page.\n", "text/plain; charset=utf-8")
             return
-        if self.path == "/health/schedule":
+        if self.path in ("/health/schedule", "/sync/schedule"):
             self.save_schedule()
             return
         if self.headers.get("Content-Length", "0") != "0":
@@ -64,7 +65,8 @@ class WebHandler(BaseHTTPRequestHandler):
             request = json.loads(self.rfile.read(length))
             if not isinstance(request, dict) or set(request) != {"enabled", "expression"}:
                 raise ValueError("Provide enabled and expression fields.")
-            result = update_schedule(request["enabled"], request["expression"])
+            update = update_sync_schedule if self.path == "/sync/schedule" else update_schedule
+            result = update(request["enabled"], request["expression"])
         except (ValueError, UnicodeError) as error:
             self.respond(400, (str(error) + "\n").encode(), "text/plain; charset=utf-8")
         except (OSError, subprocess.SubprocessError):
@@ -75,6 +77,18 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def serve(self) -> None:
         path = self.path.split("?", 1)[0]
+        if path == "/sync/output":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
+            if self.command != "HEAD":
+                for part in render_sync_output():
+                    self.wfile.write(part)
+            return
         if path == DDiskHA.WEB_READY_PATH:
             status, body, content_type = 200, b'{"ready": true}\n', "application/json; charset=utf-8"
         elif path == "/":

@@ -35,3 +35,7 @@ class DDiskHA:
     HEALTH_SUDOERS_FILE: Final[str] = "/etc/sudoers.d/disk-ha-health"
     SUDO: Final[str] = "/usr/bin/sudo"
     VISUDO: Final[str] = "/usr/sbin/visudo"
+    RSYNC: Final[str] = "/usr/bin/rsync"
+    FINDMNT: Final[str] = "/usr/bin/findmnt"
+    SYNC_CONFIG: Final[str] = "/opt/prod/disk-ha/conf/sync.json"
+    SYNC_RESULT: Final[str] = "/opt/prod/disk-ha/data/sync-output.log"

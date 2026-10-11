@@ -9,7 +9,7 @@ import subprocess
 from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.interface.HealthResult import HealthResult
 from disk_ha.interface.DriveUsage import read_usage
-from disk_ha.interface.HealthControl import read_schedule, read_contact
+from disk_ha.interface.HealthControl import read_schedule, read_contact, read_sync_schedule
 
 
 def render_page() -> bytes:
@@ -32,7 +32,23 @@ def render_page() -> bytes:
     page = page.replace("{{schedule}}", schedule)
     page = page.replace("{{run_control}}", run_control)
     page = page.replace("{{email_notification}}", render_email_notification())
+    page = page.replace("{{sync_schedule}}", render_sync_schedule())
     return page.encode("utf-8")
+
+
+def render_sync_schedule() -> str:
+    try:
+        settings = read_sync_schedule()
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return '<p>Cron schedule unavailable.</p>'
+    expression = escape(settings["expression"], quote=True)
+    checked = " checked" if settings["enabled"] else ""
+    return ('<form id="sync-schedule-form">'
+            f'<label><input id="sync-schedule-enabled" type="checkbox"{checked}> Enabled</label> '
+            '<label for="sync-schedule-expression">Cron Schedule</label> '
+            f'<input id="sync-schedule-expression" type="text" size="20" maxlength="255" value="{expression}"> '
+            '<button id="update-sync-schedule" type="submit">Update</button></form>'
+            '<p id="sync-schedule-status" role="status" aria-live="polite"></p>')
 
 
 def render_email_notification() -> str:
