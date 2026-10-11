@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Formatted HTML SMART emails with a table of contents, health summary, disk identity and attribute tables, full diagnostics, and a plain-text alternative.
+
+### Fixed
+
+- Parse standard and brief SMART attribute tables correctly, and keep optional extended diagnostic failures separate from the disk health verdict.
+- Report missing msmtp configuration explicitly instead of a generic mail exit status.
+
 ## [1.1.0] - 2026-10-10 @ 20:14
 
 This release is in memory of the **Falkland Fox** who were wiped out by 1876.

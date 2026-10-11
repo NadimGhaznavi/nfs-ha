@@ -26,7 +26,8 @@ attributes 5, 187, 196, 197, and 198. Unsupported attributes are skipped.
 Missing devices, command failures, absent overall ATA health results, and
 malformed monitored values produce failures. Bits 6–7 alone do not raise an
 alert, matching the script. Raw SMART output accompanies disk problems.
-Email delivery failure is recorded separately from disk health.
+Both standard and brief ATA attribute tables are parsed using their RAW_VALUE
+column. Email delivery failure is recorded separately from disk health.
 
 ## Scheduling and results
 
@@ -71,11 +72,27 @@ A configuration or persistence failure exits with status 1 and leaves the last
 completed result in place; check its timestamp and the log.
 Mail credentials stay in the external msmtp file and are not logged.
 **Email disk report** uses the configured mail recipient and runs `smartctl -x`
-on both disks. It emails one report with full SMART output even when both disks
-pass. The command is `disk-ha-check --email-report`, run as root. This request
+on both disks after a normal `smartctl -H -A` health check. The normal check
+determines disk health; optional extended-command failures remain visible in the
+report without changing that verdict. It emails one report with full SMART output
+even when both disks pass. Emails include an HTML report with a table of contents,
+health summary, per-disk identity and SMART attribute tables, and full diagnostics.
+A plain-text alternative is included for mail clients that do not display HTML. The command is `disk-ha-check --email-report`, run as root. This request
 works with scheduling disabled and waits on the shared health-check lock.
 Delivery errors are saved with the latest health result; detailed reports and
 command failures are written to `data/health.log`.
 Upgrade and removal preserve configuration, results, and logs. Removal deletes
 the named cron entry, manual-check and email-report services, sudo permissions, and checker and
 schedule-helper executables.
+
+## Troubleshooting
+
+A `FAIL` result can mean the inspection failed, rather than a failed drive. Read
+the saved `smart_output` in `data/health.json` or the report in `data/health.log`.
+Extended SMART queries may fail on unsupported optional commands.
+
+A missing msmtp configuration produces an explicit notification failure. The
+configured `mail.config_path` must point to an existing root-readable msmtp file
+with the `default` account. Installation does not provision SMTP credentials.
+For other mail failures, consult msmtp's configured logfile or syslog; diagnostics
+and credentials are not exposed in the Web UI.

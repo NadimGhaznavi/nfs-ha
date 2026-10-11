@@ -2,6 +2,8 @@
 
 from email import message_from_string
 import stat
+import tempfile
+from pathlib import Path
 import subprocess
 from types import SimpleNamespace
 import unittest
@@ -24,6 +26,20 @@ class DiskHealthTests(unittest.TestCase):
         for status in (0, 64, 128, 192):
             with self.subTest(status=status):
                 self.assertFalse(DiskHealth.from_smart(DISKS[0], HEALTHY, status).failed)
+
+    def test_standard_and_brief_tables_use_raw_column_and_ignore_later_logs(self):
+        for header, columns in (
+                ("ID# ATTRIBUTE_NAME FLAG VALUE WORST THRESH TYPE UPDATED WHEN_FAILED RAW_VALUE",
+                 "0x0033 100 100 000 Old_age Always -"),
+                ("ID# ATTRIBUTE_NAME FLAGS VALUE WORST THRESH FAIL RAW_VALUE", "PO--CK 100 100 000 -")):
+            for raw in ("0", "7", "unreadable", ""):
+                with self.subTest(header=header, raw=raw):
+                    text = HEALTHY + header + "\n" + f"197 Current_Pending_Sector {columns} {raw}\n"
+                    text += "\nSPAN MIN_LBA MAX_LBA CURRENT_TEST_STATUS\n5 0 0 Not_testing\n"
+                    health = DiskHealth.from_smart(DISKS[0], text, 0)
+                    self.assertEqual(health.failed, raw != "0")
+                    if raw == "7":
+                        self.assertEqual(health.problems, ("Current_Pending_Sector = 7",))
 
     def test_each_script_status_bit_alerts(self):
         for bit in range(6):
@@ -94,8 +110,23 @@ class SmartInspectionTests(unittest.TestCase):
             health = SmartInspection(10).inspect_verbose(DISKS[0])
         self.assertFalse(health.failed)
         self.assertIn("Device Model", health.smart_output)
-        self.assertEqual(run.call_args.args[0], [DDiskHA.SMARTCTL, "-x", DISKS[0].device_path])
+        self.assertEqual([call.args[0] for call in run.call_args_list],
+                         [[DDiskHA.SMARTCTL, "-H", "-A", DISKS[0].device_path],
+                          [DDiskHA.SMARTCTL, "-x", DISKS[0].device_path]])
         self.assertEqual(run.call_args.kwargs["timeout"], 10)
+
+    def test_verbose_optional_command_failure_does_not_change_primary_health(self):
+        for status in (0, 4, 8):
+            with self.subTest(status=status), \
+                    patch("disk_ha.interface.SmartInspection.os.stat", return_value=SimpleNamespace(st_mode=stat.S_IFBLK)), \
+                    patch("disk_ha.interface.SmartInspection.subprocess.run", side_effect=[
+                        SimpleNamespace(stdout=HEALTHY, returncode=status),
+                        SimpleNamespace(stdout=HEALTHY + "SCT Error Recovery Control command not supported\n", returncode=4)]):
+                health = SmartInspection(10).inspect_verbose(DISKS[0])
+            self.assertEqual(health.failed, status != 0)
+            self.assertEqual(health.smart_status, status)
+            self.assertIn("Extended SMART diagnostics status: 4", health.smart_output)
+            self.assertIn("SCT Error Recovery", health.smart_output)
 
     def test_nonzero_smart_status_is_parsed_and_command_has_timeout(self):
         with patch("disk_ha.interface.SmartInspection.os.stat",
@@ -134,22 +165,44 @@ class SmartInspectionTests(unittest.TestCase):
 
 class EmailNotificationTests(unittest.TestCase):
     def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.mail_config = Path(temporary.name) / "mail.conf"
+        self.mail_config.write_text("# simulated credentials\n")
         self.notification = EmailNotification("operator@example.com", "disk@example.com",
-                                              "/tmp/mail.conf", 10)
+                                              str(self.mail_config), 10)
         self.report = CheckDisks(DISKS, "host", lambda disk: DiskHealth(disk, ("Failure",)),
                                  Mock()).run()
+
+    def test_missing_mail_configuration_is_explicit_and_does_not_invoke_msmtp(self):
+        self.mail_config.unlink()
+        with patch("disk_ha.interface.EmailNotification.subprocess.run") as command:
+            with self.assertRaisesRegex(NotificationError, "configuration file is missing"):
+                self.notification.send(self.report, "host")
+            command.assert_not_called()
+        with patch("disk_ha.interface.EmailNotification.Path.is_file", side_effect=PermissionError("secret")), \
+                patch("disk_ha.interface.EmailNotification.subprocess.run") as command:
+            with self.assertRaisesRegex(NotificationError, "configuration file is missing or inaccessible"):
+                self.notification.send(self.report, "host")
+            command.assert_not_called()
 
     def test_email_contains_host_and_combined_report(self):
         with patch("disk_ha.interface.EmailNotification.subprocess.run",
                    return_value=SimpleNamespace(returncode=0)) as run:
             self.notification.send(self.report, "host")
         self.assertEqual(run.call_args.args[0],
-                         [DDiskHA.MSMTP, "--file=/tmp/mail.conf", "--account=default", "-t"])
+                         [DDiskHA.MSMTP, f"--file={self.mail_config}", "--account=default", "-t"])
         self.assertEqual(run.call_args.kwargs["timeout"], 10)
         message = message_from_string(run.call_args.kwargs["input"])
         self.assertEqual(message["Subject"], "SMART disk alert on host")
         self.assertEqual(message["To"], "operator@example.com")
-        self.assertEqual(message.get_payload(decode=True).decode(), self.report.render())
+        self.assertEqual(message.get_content_type(), "multipart/alternative")
+        self.assertEqual([part.get_content_type() for part in message.get_payload()], ["text/plain", "text/html"])
+        html = message.get_payload(1).get_payload(decode=True).decode()
+        self.assertIn("Table of contents", html)
+        self.assertIn('href="#disk-1"', html)
+        self.assertIn("Health summary", html)
+        self.assertEqual(message.get_payload(0).get_payload(decode=True).decode(), self.report.render())
 
     def test_delivery_errors_do_not_expose_mail_diagnostics_or_credentials(self):
         for failure in (OSError("secret"), subprocess.TimeoutExpired("secret", 10), None):
@@ -169,7 +222,13 @@ class EmailNotificationTests(unittest.TestCase):
         message = message_from_string(command.call_args.kwargs["input"])
         self.assertEqual(message["Subject"], "SMART disk report on host")
         self.assertEqual(message["To"], "operator@example.com")
-        body = message.get_payload(decode=True).decode()
+        self.assertEqual(message.get_content_type(), "multipart/alternative")
+        self.assertEqual([part.get_content_type() for part in message.get_payload()], ["text/plain", "text/html"])
+        html = message.get_payload(1).get_payload(decode=True).decode()
+        self.assertIn("Table of contents", html)
+        self.assertIn('href="#disk-1"', html)
+        self.assertIn("Health summary", html)
+        body = message.get_payload(0).get_payload(decode=True).decode()
         for disk in DISKS:
             self.assertIn(f"Full data: {disk.device_path}", body)
         self.assertIn("Overall result: PASS", body)

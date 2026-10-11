@@ -20,7 +20,15 @@ class SmartInspection:
         return self._inspect(disk, ["-H", "-A"])
 
     def inspect_verbose(self, disk: Disk) -> DiskHealth:
-        return self._inspect(disk, ["-x"])
+        health = self.inspect(disk)
+        extended = self._inspect(disk, ["-x"])
+        output = extended.smart_output
+        if extended.smart_status != 0:
+            output += (f"\nExtended SMART diagnostics status: {extended.smart_status}.\n"
+                       + "\n".join(extended.problems) + "\n")
+        return DiskHealth(disk, health.problems,
+                          "Health check (-H -A):\n" + health.smart_output
+                          + "\nExtended report (-x):\n" + output, health.smart_status)
 
     def _inspect(self, disk: Disk, options: list[str]) -> DiskHealth:
         try:
