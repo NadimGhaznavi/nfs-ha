@@ -29,8 +29,8 @@ class DriveUsageTests(unittest.TestCase):
             page = render_page().decode()
         self.assertEqual([call.args[0] for call in usage.call_args_list],
                          ["/exports/disk1", "/exports/disk2"])
-        self.assertIn('<th scope="row">Disk 1</th><td>8.00</td><td>3.12</td>', page)
-        self.assertIn('<th scope="row">Disk 2</th><td>6.00</td><td>2.00</td>', page)
+        self.assertIn('<th scope="row">Disk 1</th><td>Source</td><td>8.00</td><td>3.12</td>', page)
+        self.assertIn('<th scope="row">Disk 2</th><td>Target</td><td>6.00</td><td>2.00</td>', page)
         self.assertNotIn("{{disk", page)
 
     def test_missing_and_unreadable_drives_have_explicit_states(self):
@@ -39,8 +39,8 @@ class DriveUsageTests(unittest.TestCase):
                     patch("disk_ha.server.DrivePage.read_usage", side_effect=[
                         failure, SimpleNamespace(total=8 * 10**12, used=0)]):
                 page = render_page().decode()
-            self.assertIn(f'<th scope="row">Disk 1</th><td>{label}</td><td>{label}</td>', page)
-            self.assertIn('<th scope="row">Disk 2</th><td>8.00</td><td>0.00</td>', page)
+            self.assertIn(f'<th scope="row">Disk 1</th><td>Source</td><td>{label}</td><td>{label}</td>', page)
+            self.assertIn('<th scope="row">Disk 2</th><td>Target</td><td>8.00</td><td>0.00</td>', page)
 
 
 if __name__ == "__main__":

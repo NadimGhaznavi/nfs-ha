@@ -56,10 +56,6 @@ the replacement storage.
 NFS configuration, NFS failover, and automatic recovery are outside this
 project's scope.
 
-## Decisions still to make
-
-- Synchronization frequency.
-
 The [web interface]({{ site.baseurl }}{% link pages/web-interface.md %}) currently
 displays a title bar and a Drive Configuration table with capacity and usage
 in TB for both mounted disks on port `23300`.
@@ -71,7 +67,9 @@ Email Notification shows the configured contact and provides **Email disk report
 for a fresh, verbose SMART report of both disks.
 The initial schedule checks daily at 14:00 server time and retains the existing
 script's email settings. Installed settings are preserved on upgrade.
-Scheduled synchronization is not yet implemented.
+[Data synchronization]({{ site.baseurl }}{% link pages/data-sync.md %}) mirrors
+Disk 1 to Disk 2 every four hours by default. Data Sync Schedule reads and edits
+its cron entry and links to the most recent verbose output.
 
 ## Development
 

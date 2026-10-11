@@ -20,6 +20,7 @@
     }
     .masthead h1 { margin: 0; font-size: 1.3rem; font-weight: 700; }
     .masthead a { color: #83d5c5; text-decoration: none; }
+    main a { color: #83d5c5; }
     .masthead p { margin: .35rem 0 0; font-size: .85rem; color: #adc5c4; }
     main { padding: 1.5rem 2rem; }
     .panel { border: 1px solid #345155; border-radius: .4rem; padding: 1rem 1.5rem; }
@@ -33,13 +34,14 @@
     button:disabled { opacity: .5; cursor: default; }
     input[type="text"] { background: #11191c; color: #e5efed; border: 1px solid #adc5c4;
                            border-radius: .3rem; padding: .6rem; font: inherit; max-width: 100%; }
-    #schedule-form { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+    #schedule-form, #sync-schedule-form { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: .8rem; border-bottom: 1px solid #345155; }
     thead th { background: #1a2a2e; }
     tbody th { font-weight: 400; }
     td { font-variant-numeric: tabular-nums; }
     th:not(:first-child), td { text-align: right; }
+    .drives th:nth-child(2), .drives td:nth-child(2) { text-align: left; }
     tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
     tbody tr:hover { background: #1a2a2e; }
     :focus-visible { outline: 2px solid #83d5c5; outline-offset: 3px; }
@@ -64,17 +66,22 @@
   <main>
     <section class="panel" aria-labelledby="drive-heading">
       <h2 id="drive-heading">Drive Configuration</h2>
-      <table>
-        <thead><tr><th scope="col">Device</th><th scope="col">Capacity (TB)</th><th scope="col">Usage (TB)</th></tr></thead>
+      <table class="drives">
+        <thead><tr><th scope="col">Device</th><th scope="col">Role</th><th scope="col">Capacity (TB)</th><th scope="col">Usage (TB)</th></tr></thead>
         <tbody>
-          <tr><th scope="row">Disk 1</th><td>{{disk1_capacity}}</td><td>{{disk1_usage}}</td></tr>
-          <tr><th scope="row">Disk 2</th><td>{{disk2_capacity}}</td><td>{{disk2_usage}}</td></tr>
+          <tr><th scope="row">Disk 1</th><td>Source</td><td>{{disk1_capacity}}</td><td>{{disk1_usage}}</td></tr>
+          <tr><th scope="row">Disk 2</th><td>Target</td><td>{{disk2_capacity}}</td><td>{{disk2_usage}}</td></tr>
         </tbody>
       </table>
     </section>
     <section class="panel" aria-labelledby="schedule-heading">
       <h2 id="schedule-heading">Health Check Schedule</h2>
       {{schedule}}
+    </section>
+    <section class="panel" aria-labelledby="sync-schedule-heading">
+      <h2 id="sync-schedule-heading">Data Sync Schedule</h2>
+      {{sync_schedule}}
+      <p><a href="/sync/output">Most recent sync output</a></p>
     </section>
     <section class="panel health" aria-labelledby="health-heading">
       <h2 id="health-heading">Disk Health</h2>
@@ -87,6 +94,33 @@
     </section>
   </main>
   <script>
+    const syncForm = document.getElementById('sync-schedule-form');
+    if (syncForm) syncForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const update = document.getElementById('update-sync-schedule');
+      const status = document.getElementById('sync-schedule-status');
+      update.disabled = true;
+      status.textContent = 'Updating schedule…';
+      try {
+        const response = await fetch('/sync/schedule', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: document.getElementById('sync-schedule-enabled').checked,
+                                 expression: document.getElementById('sync-schedule-expression').value })
+        });
+        if (!response.ok) {
+          status.textContent = await response.text();
+          return;
+        }
+        const settings = await response.json();
+        document.getElementById('sync-schedule-enabled').checked = settings.enabled;
+        document.getElementById('sync-schedule-expression').value = settings.expression;
+        status.textContent = 'Schedule updated.';
+      } catch (error) {
+        status.textContent = 'Update failed. Reload to check the installed schedule before retrying.';
+      } finally {
+        update.disabled = false;
+      }
+    });
     const emailButton = document.getElementById('email-report');
     emailButton.addEventListener('click', async () => {
       const status = document.getElementById('email-status');

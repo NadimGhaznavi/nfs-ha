@@ -9,17 +9,20 @@ import sys
 from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.interface.HealthConfiguration import HealthConfiguration, validate_expression
 from disk_ha.interface.HealthSchedule import HealthSchedule
+from disk_ha.interface.SyncSchedule import SyncSchedule
 
 
 def dispatch(request: dict) -> dict:
     if request == {"action": "read"}:
         return HealthSchedule.read()
+    if request == {"action": "read-sync"}:
+        return SyncSchedule.read()
     if request == {"action": "contact"}:
         configuration = HealthConfiguration(Path(DDiskHA.INSTALL_DIR) / "conf/health.json")
         return {"recipient": (configuration.notification.recipient
                               if configuration.notification is not None else None)}
     if (isinstance(request, dict) and set(request) == {"action", "enabled", "expression"}
-            and request["action"] == "update"):
+            and request["action"] in ("update", "update-sync")):
         if type(request["enabled"]) is not bool or not isinstance(request["expression"], str):
             raise ValueError("Provide an enabled flag and a cron expression.")
         if request["expression"] or request["enabled"]:
@@ -27,7 +30,8 @@ def dispatch(request: dict) -> dict:
         if request["enabled"]:
             subprocess.run([DDiskHA.SYSTEMCTL, "enable", "--now", "cron.service"],
                            capture_output=True, check=True, timeout=30)
-        return HealthSchedule.update(Path(DDiskHA.INSTALL_DIR), request["enabled"], request["expression"])
+        policy = SyncSchedule if request["action"] == "update-sync" else HealthSchedule
+        return policy.update(Path(DDiskHA.INSTALL_DIR), request["enabled"], request["expression"])
     raise ValueError("Invalid schedule request.")
 
 

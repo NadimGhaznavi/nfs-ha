@@ -22,6 +22,8 @@ from disk_ha.interface.DatabaseProvisioning import DatabaseProvisioning
 from disk_ha.interface.SystemAccount import SystemAccount
 from disk_ha.interface.HealthConfiguration import HealthConfiguration
 from disk_ha.interface.HealthSchedule import HealthSchedule
+from disk_ha.interface.SyncConfiguration import SyncConfiguration
+from disk_ha.interface.SyncSchedule import SyncSchedule
 
 
 def systemctl(*arguments: str) -> None:
@@ -67,6 +69,7 @@ def install() -> None:
     account = SystemAccount.provision()
     root = Path(DDiskHA.INSTALL_DIR)
     upgrading = (root / "bin/disk-ha-check").exists()
+    sync_upgrading = (root / "bin/disk-ha-sync").exists()
     root.mkdir(parents=True, exist_ok=True)
     root.chmod(0o755)
     for name in ("bin", "conf", "data"):
@@ -82,6 +85,16 @@ def install() -> None:
             stream.write((REPOSITORY / "conf/health.json").read_text())
     configuration.chmod(0o600)
     health = HealthConfiguration(configuration)
+    sync_configuration = root / "conf/sync.json"
+    if not sync_configuration.exists():
+        with sync_configuration.open("x") as stream:
+            stream.write((REPOSITORY / "conf/sync.json").read_text())
+    sync_configuration.chmod(0o600)
+    sync = SyncConfiguration(sync_configuration)
+    if sync.enabled:
+        for executable in (DDiskHA.RSYNC, DDiskHA.FINDMNT):
+            if not os.access(executable, os.X_OK):
+                raise ValueError(f"Required executable is missing: {executable}")
     if health.enabled:
         for executable in (DDiskHA.SMARTCTL, DDiskHA.MSMTP, DDiskHA.CRONTAB):
             if not os.access(executable, os.X_OK):
@@ -92,6 +105,12 @@ def install() -> None:
     log.touch(exist_ok=True)
     os.chown(log, os.geteuid(), account.pw_gid)
     log.chmod(0o640)
+    sync_log = root / "data/sync.log"
+    if sync_log.is_symlink() or (sync_log.exists() and (not sync_log.is_file() or sync_log.stat().st_uid != os.geteuid())):
+        raise ValueError("Sync log must be a regular file owned by root.")
+    sync_log.touch(exist_ok=True)
+    os.chown(sync_log, os.geteuid(), account.pw_gid)
+    sync_log.chmod(0o640)
     DatabaseProvisioning().provision()
     # Stage the package before replacing installed files. Individual replacements
     # are atomic, including the constants file read by CMDB scanners.
@@ -119,6 +138,12 @@ def install() -> None:
         zipapp.create_archive(source_root, target=scheduler, interpreter="/usr/bin/python3")
         scheduler.chmod(0o755)
         scheduler.replace(root / "bin/disk-ha-schedule")
+        (source_root / "__main__.py").write_text(
+            "from disk_ha.sync import main\nraise SystemExit(main())\n")
+        sync_worker = staging / "disk-ha-sync"
+        zipapp.create_archive(source_root, target=sync_worker, interpreter="/usr/bin/python3")
+        sync_worker.chmod(0o755)
+        sync_worker.replace(root / "bin/disk-ha-sync")
         package = root / "disk_ha"
         package.mkdir(exist_ok=True)
         package.chmod(0o755)
@@ -184,7 +209,16 @@ def install() -> None:
             HealthSchedule.save_configuration(configuration, values)
         health = HealthConfiguration(configuration)
         HealthSchedule.apply(root, health)
-    if health.enabled:
+    with sync_configuration.with_suffix(".lock").open("a") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        if sync_upgrading:
+            installed = SyncSchedule.read()
+            values = json.loads(sync_configuration.read_text())
+            values.update(enabled=installed["enabled"], expression=installed["expression"] or None)
+            SyncSchedule.save_configuration(sync_configuration, values)
+        sync = SyncConfiguration(sync_configuration)
+        SyncSchedule.apply(root, sync)
+    if health.enabled or sync.enabled:
         systemctl("enable", "--now", "cron.service")
     restart()
     print(f"Installed disk-ha {DDiskHA.VERSION} in {root}; configuration and data preserved.")
@@ -197,6 +231,9 @@ def uninstall() -> None:
         with configuration.with_suffix(".lock").open("a") as stream:
             fcntl.flock(stream, fcntl.LOCK_EX)
             HealthSchedule.apply(root, None)
+        with (root / "conf/sync.lock").open("a") as stream:
+            fcntl.flock(stream, fcntl.LOCK_EX)
+            SyncSchedule.apply(root, None)
     service = Path(DDiskHA.WEB_SERVICE_FILE)
     health_service = Path(DDiskHA.HEALTH_SERVICE_FILE)
     email_service = Path(DDiskHA.EMAIL_REPORT_SERVICE_FILE)
@@ -214,6 +251,7 @@ def uninstall() -> None:
     (root / "bin/disk-ha-web").unlink(missing_ok=True)
     (root / "bin/disk-ha-check").unlink(missing_ok=True)
     (root / "bin/disk-ha-schedule").unlink(missing_ok=True)
+    (root / "bin/disk-ha-sync").unlink(missing_ok=True)
     package = Path(DDiskHA.INSTALL_DIR) / "disk_ha"
     if package.exists():
         shutil.rmtree(package)

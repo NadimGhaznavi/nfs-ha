@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Sync Output · disk-ha</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #11191c; color: #e5efed; }
+    body { margin: 0; }
+    a { color: #83d5c5; }
+    header { padding: 1.2rem 2rem; background: #1a2a2e; border-bottom: 1px solid #345155; }
+    header h1 { margin: 0; font-size: 1.3rem; }
+    header a { text-decoration: none; }
+    main { padding: 1.5rem 2rem; }
+    section { border: 1px solid #345155; border-radius: .4rem; padding: 1rem 1.5rem; }
+    h2 { font-size: 1.15rem; margin: 0 0 1rem; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .9rem; }
+    :focus-visible { outline: 2px solid #83d5c5; outline-offset: 3px; }
+    @media (max-width: 600px) { header, main, section { padding: 1rem; } }
+  </style>
+</head>
+<body>
+  <header><h1><a href="/">disk-ha</a></h1></header>
+  <main>
+    <section aria-labelledby="output-heading">
+      <h2 id="output-heading">Most Recent Data Sync Output</h2>
+      <p><a href="/">Back to Drive Configuration</a></p>
+      <pre>{{output}}</pre>
+    </section>
+  </main>
+</body>
+</html>

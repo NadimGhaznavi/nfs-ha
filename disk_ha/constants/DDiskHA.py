@@ -4,10 +4,10 @@ from typing import Final
 
 
 class DDiskHA:
-    VERSION: Final[str] = "0.5.0"
+    VERSION: Final[str] = "1.0.0"
     CMDB_SUBTYPE: Final[str] = "Disk Monitoring and Mirroring"
     CMDB_SUPPLIER: Final[str] = "Nadim-Daniel"
-    CMDB_CODENAME: Final[str] = "Dodo"
+    CMDB_CODENAME: Final[str] = "Elephant Bird"
     INSTALL_DIR: Final[str] = "/opt/prod/disk-ha"
     WEB_HOST: Final[str] = "0.0.0.0"
     WEB_PORT: Final[int] = 23300
@@ -35,3 +35,7 @@ class DDiskHA:
     HEALTH_SUDOERS_FILE: Final[str] = "/etc/sudoers.d/disk-ha-health"
     SUDO: Final[str] = "/usr/bin/sudo"
     VISUDO: Final[str] = "/usr/sbin/visudo"
+    RSYNC: Final[str] = "/usr/bin/rsync"
+    FINDMNT: Final[str] = "/usr/bin/findmnt"
+    SYNC_CONFIG: Final[str] = "/opt/prod/disk-ha/conf/sync.json"
+    SYNC_RESULT: Final[str] = "/opt/prod/disk-ha/data/sync-output.log"

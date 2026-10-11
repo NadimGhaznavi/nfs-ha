@@ -33,6 +33,14 @@ class InstallationTests(unittest.TestCase):
             "expression": json.loads((self.target / "conf/health.json").read_text())["expression"] or ""})
         self.reading = reading.start()
         self.addCleanup(reading.stop)
+        sync_scheduling = patch.object(installer.SyncSchedule, "apply")
+        self.sync_scheduling = sync_scheduling.start()
+        self.addCleanup(sync_scheduling.stop)
+        sync_reading = patch.object(installer.SyncSchedule, "read", side_effect=lambda: {
+            "enabled": json.loads((self.target / "conf/sync.json").read_text())["enabled"],
+            "expression": json.loads((self.target / "conf/sync.json").read_text())["expression"] or ""})
+        self.sync_reading = sync_reading.start()
+        self.addCleanup(sync_reading.stop)
         executable_check = patch.object(installer.os, "access", return_value=True)
         executable_check.start()
         self.addCleanup(executable_check.stop)
@@ -141,6 +149,8 @@ class InstallationTests(unittest.TestCase):
         self.assertFalse((self.target / "disk_ha").exists())
         self.assertFalse(executable.exists())
         self.assertFalse(checker.exists())
+        self.assertFalse((self.target / "bin/disk-ha-sync").exists())
+        self.sync_scheduling.assert_any_call(self.target, None)
         self.assertFalse((self.target / "bin/disk-ha-schedule").exists())
         self.scheduling.assert_any_call(self.target, None)
         self.assertFalse(service.exists())
@@ -236,6 +246,36 @@ class InstallationTests(unittest.TestCase):
         installer.install()
         self.assertFalse(json.loads(config.read_text())["enabled"])
         self.assertFalse(self.scheduling.call_args.args[1].enabled)
+
+    def test_sync_install_upgrade_and_removal_preserve_settings_and_output(self):
+        installer.install()
+        config = self.target / "conf/sync.json"
+        values = json.loads(config.read_text())
+        self.assertTrue(values["enabled"])
+        self.assertEqual(values["expression"], "0 */4 * * *")
+        self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+        self.assertEqual((self.target / "data/sync.log").stat().st_mode & 0o777, 0o640)
+        worker = self.target / "bin/disk-ha-sync"
+        self.assertEqual(worker.stat().st_mode & 0o777, 0o755)
+        for name in ("SyncConfiguration", "MountInspection", "RsyncMirror", "SyncSchedule", "CronSchedule"):
+            self.assertTrue((self.target / f"disk_ha/interface/{name}.py").is_file())
+        result = subprocess.run([str(worker), "--help"], capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--result", result.stdout)
+        output = self.target / "data/sync-output.log"
+        output.write_text("last verbose output")
+        values["timeout"] = 12345
+        config.write_text(json.dumps(values))
+        self.sync_reading.side_effect = None
+        self.sync_reading.return_value = {"enabled": True, "expression": "0 */6 * * *"}
+        installer.install()
+        self.assertEqual(json.loads(config.read_text())["expression"], "0 */6 * * *")
+        self.assertEqual(json.loads(config.read_text())["timeout"], 12345)
+        self.assertEqual(json.loads(config.read_text())["source"], values["source"])
+        installer.uninstall()
+        self.assertFalse(worker.exists())
+        self.assertTrue(config.is_file())
+        self.assertEqual(output.read_text(), "last verbose output")
 
     def test_wrappers_delegate_from_a_checkout_with_spaces(self):
         with tempfile.TemporaryDirectory(prefix="disk-ha-wrappers-") as temporary:
