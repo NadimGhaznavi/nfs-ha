@@ -56,6 +56,7 @@ class InstallationTests(unittest.TestCase):
         self.addCleanup(service.stop)
         for name, filename in (("HEALTH_SERVICE_FILE", "disk-ha-health.service"),
                                ("EMAIL_REPORT_SERVICE_FILE", "disk-ha-email-report.service"),
+                               ("SYNC_SERVICE_FILE", "disk-ha-sync.service"),
                                ("HEALTH_SUDOERS_FILE", "disk-ha-health")):
             setting = patch.object(installer.DDiskHA, name, str(Path(temporary.name) / filename))
             setting.start()
@@ -112,10 +113,16 @@ class InstallationTests(unittest.TestCase):
         self.assertIn("User=root", email_service.read_text())
         self.assertEqual(email_service.stat().st_mode & 0o777, 0o644)
         self.assertIn(f"ExecStart={self.target}/bin/disk-ha-check", health_service.read_text())
+        sync_service = Path(installer.DDiskHA.SYNC_SERVICE_FILE)
+        self.assertIn("User=root", sync_service.read_text())
+        self.assertIn(f"ExecStart={self.target}/bin/disk-ha-sync --config {self.target}/conf/sync.json "
+                      f"--result {self.target}/data/sync-output.log", sync_service.read_text())
+        self.assertEqual(sync_service.stat().st_mode & 0o777, 0o644)
         self.assertEqual(sudoers.stat().st_mode & 0o777, 0o440)
         self.assertEqual(sudoers.read_text(),
                          "diskha ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block disk-ha-health.service\n"
                          "diskha ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block disk-ha-email-report.service\n"
+                         "diskha ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block disk-ha-sync.service\n"
                          f'diskha ALL=(root) NOPASSWD: {self.target}/bin/disk-ha-schedule ""\n')
         self.control.assert_any_call("enable", service.name)
         self.restart.assert_called_once_with()
@@ -155,6 +162,7 @@ class InstallationTests(unittest.TestCase):
         self.scheduling.assert_any_call(self.target, None)
         self.assertFalse(service.exists())
         self.assertFalse(health_service.exists())
+        self.assertFalse(Path(installer.DDiskHA.SYNC_SERVICE_FILE).exists())
         self.assertFalse(Path(installer.DDiskHA.EMAIL_REPORT_SERVICE_FILE).exists())
         self.assertFalse(sudoers.exists())
         self.control.assert_any_call("disable", "--now", service.name)

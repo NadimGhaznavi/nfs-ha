@@ -87,6 +87,33 @@ class WebTests(unittest.TestCase):
                 self.assertEqual(response.status, 200)
                 self.assertEqual(response.read(), b"")
 
+    @patch("disk_ha.server.__main__.request_sync")
+    def test_sync_now_requires_same_origin_empty_post_and_reports_failure(self, sync):
+        with self.opener.open(Request(self.url + "/sync/run", data=b"",
+                                      headers={"Origin": self.url}), timeout=2) as response:
+            self.assertEqual(response.status, 202)
+            self.assertIn(b"Sync requested", response.read())
+        sync.assert_called_once_with()
+        sync.reset_mock()
+        for data, origin, code in ((b"", None, 403), (b"", "http://other.example", 403),
+                                   (b"unexpected", self.url, 400)):
+            headers = {} if origin is None else {"Origin": origin}
+            with self.assertRaises(HTTPError) as raised:
+                self.opener.open(Request(self.url + "/sync/run", data=data, headers=headers), timeout=2)
+            self.assertEqual(raised.exception.code, code)
+            raised.exception.close()
+        sync.assert_not_called()
+        with self.assertRaises(HTTPError) as raised:
+            self.opener.open(self.url + "/sync/run", timeout=2)
+        self.assertEqual(raised.exception.code, 404)
+        raised.exception.close()
+        sync.side_effect = OSError("service denied")
+        with self.assertRaises(HTTPError) as raised:
+            self.opener.open(Request(self.url + "/sync/run", data=b"",
+                                    headers={"Origin": self.url}), timeout=2)
+        self.assertEqual(raised.exception.code, 503)
+        raised.exception.close()
+
     @patch("disk_ha.server.__main__.request_check")
     def test_manual_check_accepts_only_same_origin_post(self, check):
         with self.opener.open(Request(self.url + "/health/run", data=b"",
@@ -177,6 +204,7 @@ class WebTests(unittest.TestCase):
                     patch.object(installer.DDiskHA, "WEB_SERVICE_FILE", str(Path(temporary) / "service")), \
                     patch.object(installer.DDiskHA, "HEALTH_SERVICE_FILE", str(Path(temporary) / "health.service")), \
                     patch.object(installer.DDiskHA, "EMAIL_REPORT_SERVICE_FILE", str(Path(temporary) / "email.service")), \
+                    patch.object(installer.DDiskHA, "SYNC_SERVICE_FILE", str(Path(temporary) / "sync.service")), \
                     patch.object(installer.DDiskHA, "HEALTH_SUDOERS_FILE", str(Path(temporary) / "sudoers")), \
                     patch.object(installer.subprocess, "run"), \
                     patch.object(installer.SystemAccount, "provision",

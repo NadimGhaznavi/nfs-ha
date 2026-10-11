@@ -4,10 +4,10 @@ from typing import Final
 
 
 class DDiskHA:
-    VERSION: Final[str] = "1.0.0"
+    VERSION: Final[str] = "1.1.0"
     CMDB_SUBTYPE: Final[str] = "Disk Monitoring and Mirroring"
     CMDB_SUPPLIER: Final[str] = "Nadim-Daniel"
-    CMDB_CODENAME: Final[str] = "Elephant Bird"
+    CMDB_CODENAME: Final[str] = "Falkland Fox"
     INSTALL_DIR: Final[str] = "/opt/prod/disk-ha"
     WEB_HOST: Final[str] = "0.0.0.0"
     WEB_PORT: Final[int] = 23300
@@ -39,3 +39,4 @@ class DDiskHA:
     FINDMNT: Final[str] = "/usr/bin/findmnt"
     SYNC_CONFIG: Final[str] = "/opt/prod/disk-ha/conf/sync.json"
     SYNC_RESULT: Final[str] = "/opt/prod/disk-ha/data/sync-output.log"
+    SYNC_SERVICE_FILE: Final[str] = "/etc/systemd/system/disk-ha-sync.service"

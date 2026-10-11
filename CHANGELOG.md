@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-10 @ 20:14
+
+This release is in memory of the **Falkland Fox** who were wiped out by 1876.
+
+### Added
+
+- Sync Now button beside the Data Sync Schedule Update button for guarded background mirroring.
+
 ## [1.0.0] - 2026-10-10 @ 20:06
 
-This release is in memory of the **Elephant Bird**.
+This release is in memory of the **Elephant Bird** which died around 1000 CE.
 
 ### Added
 

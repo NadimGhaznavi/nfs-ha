@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from disk_ha.constants.DDiskHA import DDiskHA
 from disk_ha.server.DrivePage import render_page
-from disk_ha.interface.HealthControl import request_check, request_email_report, update_schedule, update_sync_schedule
+from disk_ha.interface.HealthControl import request_check, request_email_report, request_sync, update_schedule, update_sync_schedule
 from disk_ha.server.SyncPage import render_sync_output
 
 
@@ -23,7 +23,7 @@ class WebHandler(BaseHTTPRequestHandler):
         self.serve()
 
     def do_POST(self) -> None:
-        if self.path not in ("/health/run", "/health/schedule", "/health/email-report", "/sync/schedule"):
+        if self.path not in ("/health/run", "/health/schedule", "/health/email-report", "/sync/schedule", "/sync/run"):
             self.respond(404, b"Not found.\n", "text/plain; charset=utf-8")
             return
         # Browser requests must come from this page, including on private networks.
@@ -37,6 +37,16 @@ class WebHandler(BaseHTTPRequestHandler):
             return
         if self.headers.get("Content-Length", "0") != "0":
             self.respond(400, b"Unexpected request body.\n", "text/plain; charset=utf-8")
+            return
+        if self.path == "/sync/run":
+            try:
+                request_sync()
+            except (OSError, ValueError, subprocess.SubprocessError):
+                self.respond(503, b"Cannot start sync. Verify sync settings and the sync service.\n",
+                             "text/plain; charset=utf-8")
+            else:
+                self.respond(202, b"Sync requested. Open most recent sync output after completion.\n",
+                             "text/plain; charset=utf-8")
             return
         if self.path == "/health/email-report":
             try:

@@ -27,6 +27,8 @@ The button is disabled when monitoring is disabled or settings are unavailable.
 Data Sync Schedule appears below Health Check Schedule with the same **Enabled**,
 **Cron Schedule**, and **Update** controls. It defaults to every four hours
 (`0 */4 * * *`) and reads its installed cron entry on each page load.
+**Sync Now**, beside **Update**, requests a background sync with the saved settings.
+The button is disabled when scheduling is disabled.
 **Most recent sync output** opens a separate page showing the latest rsync output,
 timestamps, and success or failure. See
 [data synchronization]({{ site.baseurl }}{% link pages/data-sync.md %}) for configuration.
@@ -69,7 +71,8 @@ shell and no separate home directory. Application code stays root-owned;
 Root runs scheduled health checks and writes results with mode `0640`;
 the Web UI account has read access.
 The root-owned `disk-ha-health.service` runs manual checks;
-`disk-ha-email-report.service` runs requested email reports. Validated rules in
+`disk-ha-email-report.service` runs requested email reports;
+`disk-ha-sync.service` runs manual syncs through the same guarded worker as cron. Validated rules in
 `/etc/sudoers.d/disk-ha-health` let `diskha` start these services and call the
 `disk-ha-schedule` helper to read or update only disk-ha's marked root cron entry.
 The helper validates settings, preserves unrelated jobs, and keeps the worker's

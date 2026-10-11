@@ -7,11 +7,34 @@ import unittest
 from unittest.mock import patch
 
 from disk_ha.constants.DDiskHA import DDiskHA
-from disk_ha.interface.HealthControl import read_schedule, update_schedule, request_check, request_email_report
-from disk_ha.server.DrivePage import render_schedule, render_email_notification
+from disk_ha.interface.HealthControl import read_schedule, update_schedule, request_check, request_email_report, request_sync
+from disk_ha.server.DrivePage import render_schedule, render_email_notification, render_sync_schedule
 
 
 class HealthControlTests(unittest.TestCase):
+    def test_sync_now_uses_fixed_service_and_disabled_schedule_blocks_start(self):
+        for enabled in (True, False):
+            with patch("disk_ha.server.DrivePage.read_sync_schedule",
+                       return_value={"enabled": enabled, "expression": "0 */4 * * *"}):
+                html = render_sync_schedule()
+            self.assertLess(html.index('id="update-sync-schedule"'), html.index('id="sync-now"'))
+            self.assertEqual('type="button" disabled>Sync Now' in html, not enabled)
+            with patch("disk_ha.interface.HealthControl.read_sync_schedule", return_value={"enabled": enabled}), \
+                    patch("disk_ha.interface.HealthControl.subprocess.run") as command:
+                if enabled:
+                    request_sync()
+                    command.assert_called_once_with(
+                        [DDiskHA.SUDO, "-n", DDiskHA.SYSTEMCTL, "start", "--no-block", "disk-ha-sync.service"],
+                        capture_output=True, check=True, timeout=10)
+                else:
+                    with self.assertRaises(ValueError):
+                        request_sync()
+                    command.assert_not_called()
+        with patch("disk_ha.interface.HealthControl.read_sync_schedule", return_value={"enabled": True}), \
+                patch("disk_ha.interface.HealthControl.subprocess.run", side_effect=subprocess.TimeoutExpired("start", 10)):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                request_sync()
+
     def test_email_contact_display_and_unconfigured_state(self):
         with patch("disk_ha.server.DrivePage.read_contact", return_value="<operator>@example.com"):
             html = render_email_notification()
